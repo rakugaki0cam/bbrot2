@@ -1,0 +1,486 @@
+#   bbrot.py
+#                   v2
+#
+#       2022.07.09
+
+
+import math
+from cv2 import WINDOW_AUTOSIZE
+import numpy as np
+import cv2
+import os
+import matplotlib.pyplot as plt
+
+from PIL import Image
+import sys
+sys.path.append('/path/to/dir')
+import pyocr
+import pyocr.builders
+
+#ウインドウの設定
+cv2.namedWindow('template3', cv2.WINDOW_NORMAL)
+cv2.moveWindow('template3', 0, 350)
+
+cv2.namedWindow('match BB', cv2.WINDOW_NORMAL)
+cv2.moveWindow('match BB', 200, 350)
+
+
+def crop(image, pt, size):
+    """
+    画像の一部を矩形で切り取る
+    
+    Parameters
+    ----------
+    image : mat
+        切り出し元の画像
+    pt : [number,number]
+        切り取り中心[col,row]
+    size : [number,number]
+        切り取りサイズ[width, height]
+
+    Returns
+    -------
+    切り出した画像
+    """
+    left = int(pt[0] - size[0] / 2)
+    if left < 0:
+        left = 0      
+    right = int(pt[0] + size[0] / 2)
+    top = int(pt[1] - size[1] / 2)
+    if top < 0:
+        top = 0
+    bottom = int(pt[1] + size[1] / 2)
+    d = len(image.shape)
+    if d <= 2:
+        return image[top:bottom, left:right]
+    else:
+        return image[top:bottom, left:right, :]
+
+
+def rot(image, rot_in_deg):
+    """
+    画像を画像中央を中心に回転させる。回転により生じる背景は白で塗りつぶし。
+    
+    Parameters
+    ----------
+    image : mat
+        元画像
+    rot_in_deg : float
+        回転角度(deg)
+    Returns
+    -------
+    回転した画像
+    """
+    w ,h = 0, 0
+    if(len(image.shape)):
+        #gray scale
+        w, h = image.shape
+        bg = 255
+    else:
+        #color
+        w, h, _ = image.shape
+        bg = (255, 255, 255)
+    center = w / 2.0, h / 2.0
+    mat = cv2.getRotationMatrix2D(center, rot_in_deg, 1)
+    return cv2.warpAffine(image, mat, (w, h), borderValue = bg)
+
+
+def mask_circle(image, radius):
+    """
+    円の外側を白で塗りつぶす。
+
+    Parameters
+    ----------
+    image : mat
+        塗りつぶし対象の画像
+
+    radius : int
+        円の半径(px)
+    Returns
+    -------
+    塗りつぶした画像
+    """
+    mask = np.zeros(image.shape, np.uint8)
+    center = (int(mask.shape[0]/2), int(mask.shape[1]/2))
+    cv2.circle(mask, center, radius, 1, -1)
+    ret = image * mask
+    bg = np.ones(image.shape, np.uint8) * 255
+    cv2.circle(bg, center, radius, 0, -1)
+    return ret + bg
+
+
+def estimate_rot(image, template, pt, size):
+    """
+    回転角の推定
+
+    Parameters
+    ----------
+    image : mat
+        推定対象の画像
+    template : mat
+        テンプレート画像
+    pt : [number,number]
+        推定対象の中心位置[col,row]
+    size : any
+        比較するBB画像の直径 px    
+    Returns
+    -------
+    回転角 -180~+180(deg)
+    """
+    angle = -1
+    max = -9999999999
+    cr = crop(image, pt, (size + 15, size + 15 ))
+    cv2.imshow("match BB", cr)
+
+    # ぐるぐる回しながら相関が最大となる角度を求める
+    w, h = template.shape[: : -1] 
+
+    for i in range(-180, 180):
+        tp = rot(template, i)
+        matchResult = cv2.matchTemplate(cr, tp, cv2.TM_CCOEFF)
+        _, m, _, loc = cv2.minMaxLoc(matchResult)
+        
+        
+
+        if(m > max):
+            max = m
+            angle = i
+            #角度表示
+            cv2.putText(tp, str(i), org = (0, 15), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
+            # org は左下の座標
+            #マッチ値表示
+            cv2.putText(tp, str(int(max)), org = (0, 95), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
+            #cr2 = cr  ########コピーされない
+            topLeft = loc
+            bottomRight = (topLeft[0] + w, topLeft[1] + h)
+            cv2.rectangle(cr, topLeft, bottomRight, (255, 0, 255), 1)
+            
+            cv2.imshow("match BB", cr)
+            cv2.imshow("template3", tp)
+            cv2.waitKey(1)
+
+            #マッチ　類似度のヒートマップ
+            #fig, ax = plt.subplots(figsize=(10, 5))
+            #im = ax.imshow(matchResult, cmap="jet")
+            #plt.show()
+
+    print(angle , '° Match value:' ,max)
+    #cv2.waitKey(0)#########
+    return angle
+
+
+def process(filename):
+    """
+    写っているすべてのBB弾の角度を推定
+    Parameters
+    ----------
+    filename : string
+        画像ファイル名
+
+    Returns
+    -------
+    結果をオーバーレイした画像
+    """
+
+    src = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+    #右から撃っているので、左から右への時系列になるように左右反転
+    flip = cv2.flip(src, 1)      # =0:上下反転、>0:左右反転、 <0:上下左右反転
+    cv2.imshow('flip', flip)
+    cv2.moveWindow('flip', 400, 150)
+
+    #### OCR test #####   
+    t = ocrLcd(src)
+    #周期の入力
+    dt = float(input('1コマの周期 usec = '))
+
+
+
+    #コントラスト調整 (テンプレートマッチングで使用)
+    scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 0)    #alpha:スケールファクタ1.0〜2.0 beta:加算値
+    cv2.imshow('scaled', scaled)
+    cv2.moveWindow('scaled', 400, 300)
+
+    #ノイズ除去し、2値化してブロブ検出用の画像を作成
+    median = cv2.medianBlur(flip, ksize = 5)
+    cv2.imshow('median', median)
+    cv2.moveWindow('median', 400, 450)
+    # BB弾検出の閾値(DN)
+    min_gray = 50
+    max_gray = 255
+    ret, threshold = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY_INV) # | cv2.THRESH_OTSU)
+    src2 = threshold    #二値データ
+    cv2.imshow('threshold', threshold)
+    cv2.moveWindow('threshold', 400, 600)
+
+    #ブロブ（塊）検出の設定
+    params = cv2.SimpleBlobDetector_Params()
+    #閾値
+    params.minThreshold = min_gray  ###
+    params.maxThreshold = max_gray  ###
+    #塊の大きさ（面積）
+    params.filterByArea = True
+    bb_radius_max = 60      #すこし大きめに見積もったBB弾の半径(px)
+    params.minArea = bb_radius_max * bb_radius_max * math.pi * 0.7      #面積なのでr＾2
+    params.maxArea = bb_radius_max * bb_radius_max * math.pi
+    #円形度でフィルタ(凹面concave)
+    params.filterByCircularity = True
+    params.minCircularity = 0.5     #0〜1 = 4πS/L^2   S:面積(画素数) L:周囲長　　　円形度が高い->1.0
+    #凸面フィルタ
+    params.filterByConvexity = True
+    params.minConvexity = 0.5       #0〜1 = S/C  S:面積　C:凸面の面積（円形から出っぱった分）
+    #楕円形フィルタ（形態の伸び　円形=1、直線=0 慣性モーメント）
+    params.filterByInertia = True
+    params.minInertiaRatio = 0.5
+    #検出器を設定
+    ver = (cv2.__version__).split('.')
+    if int(ver[0]) <= 2:
+        #openCV ver.2
+        detector = cv2.SimpleBlobDetector(params)
+    else:
+        #openCV ver.3~
+        detector = cv2.SimpleBlobDetector_create(params)  
+
+    #検出器を作動（ブロブを検出する）
+    keypoints = detector.detect(src2) 
+
+    #ブロブを円で囲む
+    blank = np.zeros((1, 1))  
+    blobs = cv2.drawKeypoints(flip, keypoints, blank, (255, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS) 
+    #ブロブの個数
+    bbcount = len(keypoints)
+    print(f'円の個数: {bbcount}')
+
+
+    #ブロブ検出数の判定
+    if bbcount < 2:
+        i = 0
+        print('検出数不足')
+        return -1
+    
+    #座標x位置順でソート
+    kps = sorted(keypoints, key=lambda kp: kp.pt[0])    #kp.pt[0]:x座標
+
+    #画像へコマ周期を書き込み
+    v0 = 0.012 / (dt / 1000000) 
+    text = "Circular Blobs:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec".format(len(keypoints), dt, v0)
+    locate = (int(kps[0].pt[0] - 100), int(kps[0].pt[1] + 100))
+    cv2.putText(blobs, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 255), 1)
+
+    bbcenter = []
+    blobsize = []
+    for k in kps:          ###test
+        center = (int(k.pt[0]), int(k.pt[1]))
+        cv2.circle(blobs, center, 6,(255, 0, 255), -2)
+        bbcenter.append(center)
+        blobsize.append(int(k.size))
+
+    print(bbcenter, blobsize)
+
+    #ブロブ検出結果から作業用画像をクロップする  #########################################
+    #x座標
+    offsetX = 250
+    left = bbcenter[0][0] - offsetX
+    if left < 0:
+        left = 0
+    right = bbcenter[bbcount - 1][0] + offsetX
+    if right > blobs.shape[1]:              #(y_size, x_size, color)
+        right = blobs.shape[1]
+
+    #y座標
+    offsetY = 25
+    bby = sorted(bbcenter, key = lambda x: x[1])
+    top = bby[bbcount - 1][1] - blobsize[0] - offsetY
+    if top < 0:
+        top = 0
+    bottom = bby[0][1]  + blobsize[0] + offsetY  #(y_size, x_size, color)
+    if bottom > blobs.shape[0]:     
+        bottom = blobs.shape[0]
+
+    #ブロブ検出＆作業書き込み用画像をクロップ
+    d = len(blobs.shape)
+    if d <= 2:
+        blobs =  blobs[top:bottom, left:right]
+    else:
+        blobs = blobs[top:bottom, left:right, :]
+    #マッチ検出用画像もクロップ
+    d = len(scaled.shape)
+    if d <= 2:
+        scaled =  scaled[top:bottom, left:right]
+    else:
+        scaled = scaled[top:bottom, left:right, :]
+
+    cv2.imshow("blobs", blobs) 
+    cv2.imshow('scaled', scaled)
+    cv2.waitKey(1)
+
+    #クロップ後の座標修正
+    bbcenter2 = []
+    for b in bbcenter:
+        bbcenter2.append((b[0] - left, b[1] - top))
+
+    #左から数えてtemplate_index目のBB弾を基準とする
+    #カメラ撮影光軸中心付近
+    template_index = bbcount // 2   #//の答えは整数となる
+
+    #基準としたBB弾を切り出してテンプレートとする
+    c = crop(scaled, bbcenter2[template_index], (blobsize[template_index]+ 10, blobsize[template_index] + 10))
+    cv2.imshow("template_1", c)
+    cv2.moveWindow('template_1', 0, 200)
+    cv2.waitKey(1)
+
+
+    #周辺の影の部分をマスク
+    mask = int((kps[template_index].size / 2) - 5)
+    template = mask_circle(c, mask)
+    center = (int(template.shape[0]/2), int(template.shape[1]/2))
+    template = crop(template, center, (blobsize[template_index] - 10, blobsize[template_index] - 10))
+    #2値化オプション??###
+    ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU) 
+
+
+    print('計算開始')
+
+    #検出したBB弾すべてに角度推定を実行する
+    result = []
+    anglefirst = 999
+    for k in range(bbcount):
+        point = bbcenter2[k] #BB中心
+        #角度を推定
+        angle = estimate_rot(scaled, template, point, blobsize[k])
+
+        #推定角度軸線を表示
+        line = 80
+        rad = math.radians(angle)
+        dl = (math.cos(rad) * line, -math.sin(rad) * line)
+        pt1 = np.add     (point, dl).astype(np.int32)
+        pt2 = np.subtract(point, dl).astype(np.int32)
+        cv2.line(blobs, pt1, pt2, (255,0,255), thickness = 1)
+        
+        if anglefirst == 999:
+            anglefirst = angle
+            angleBefore = angle
+
+        #角度の書き込み
+        da = angle - angleBefore
+        angleTotal = angle - anglefirst
+        angleBefore = angle
+
+        textAngle = '{:4d}deg'.format(angle)
+        cv2.putText(blobs, textAngle, org = (point[0] + 30, point[1] - 60), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = (255, 0, 255), thickness = 1)
+        if k >= 1:
+            textDa = '({:3d})'.format(da)
+            cv2.putText(blobs, textDa, org = (point[0] + 55, point[1] - 35), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = (0, 255, 255), thickness = 1)
+
+        #回転角の書き込み
+        if k >= template_index:
+            kaiten = 1000000.0 / dt /(k * 360 / angleTotal)
+            textRps =  '{:6.1f}rps'.format (kaiten)
+            cv2.putText(blobs, textRps, org = (point[0] + 0, point[1] + 80), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = (0, 255, 255), thickness = 1)
+
+        result.append((k, point[0], point[1], blobsize[k], angle, da, angleTotal))
+
+        cv2.imshow("blobs", blobs) 
+        cv2.waitKey(1) 
+
+    # 結果の表示など
+    for i, d in enumerate(result):
+        print(*d, sep = ',')
+    
+    # コマ数と回転角
+    for r in result[template_index: ]:
+        koma = r[0]
+        kaiten = 1000000.0 / dt /(r[0] * 360 / r[6])
+        print('{:2d}コマ {:6.1f}rps'.format(koma, kaiten))
+    return blobs
+
+
+def ocrLcd(image):
+    #OCRで発光周期時間を読み取り
+    #
+    lcdImage = crop(image, ( 2000, 800) , ( 1000, 800))
+    #cv2.imshow("image0", lcdImage)
+    #cv2.waitKey(1) 
+    lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
+    #cv2.imshow("image1", lcdImage)
+    #cv2.waitKey(1) 
+    lcdImage = cv2.medianBlur(lcdImage, ksize = 1) #ksizeは奇数
+    #cv2.imshow("image2", lcdImage)
+    #cv2.waitKey(1)
+    ret, lcdImage = cv2.threshold(lcdImage, 95, 255,cv2.THRESH_BINARY)
+    #lcdImage2 = cv2.adaptiveThreshold(lcdImage, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,171, 0)
+    #cv2.imshow("image th", lcdImage)
+    #cv2.waitKey(1) 
+    #retはOTSUのときのしきい値
+    kernel = np.ones((3,3),np.uint8)
+    lcdImage = cv2.erode(lcdImage, kernel,3)
+    
+    lcdImage = rot(lcdImage, 91.5)
+    #cv2.imshow("image4", lcdImage)
+    #cv2.waitKey(1) 
+    lcdImage = cv2.bitwise_not(lcdImage)    #反転
+    #cv2.imshow("image4", lcdImage)
+    #cv2.waitKey(1) 
+
+    #####test 文字
+    cv2.putText(lcdImage, "* test 12.3m/sec (456.7us) test *", org = (20, 860), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = (0,0,0), thickness = 2)
+    cv2.imwrite('test.png', lcdImage)
+
+    cv2.namedWindow("lcdImage", cv2.WINDOW_NORMAL)
+    h = lcdImage.shape[0]
+    w = lcdImage.shape[1]
+    rLcdImage = cv2.resize(lcdImage, (w // 2, h // 2))
+
+    cv2.imshow("lcdImage", rLcdImage)
+    cv2.moveWindow("lcdImage", 0, 500)
+
+    #cv2.imwrite("test.png",lcdImage)
+    cv2.waitKey(1) 
+    
+    tools = pyocr.get_available_tools()
+    if len(tools) == 0:
+        #print("No OCR tool found")
+        SystemExit(1)
+
+    tool = tools[0]
+    #print("will use tool '%s'" % (tool.get_name()))
+    langs = tool.get_available_languages()
+    #print("available languages: %s" % ", ".join(langs))
+
+    #builder = pyocr.builders.TextBuilder(tesseract_layout =  6) #text
+    builder = pyocr.builders.WordBoxBuilder(tesseract_layout=6) #box
+    txt = tool.image_to_string(Image.open('test.png'), lang = 'eng', builder = builder)
+    
+    out = cv2.imread('test.png')
+    for r in txt:
+        print(r.content, end = ' ')
+        #print(r.position)
+        cv2.rectangle(out, r.position[0], r.position[1],(255, 0, 255), 2)
+
+    cv2.imshow('lcdImage', out)
+    cv2.waitKey(1)
+    #print(txt)
+    print()
+
+    return txt
+
+
+
+####  main  ######
+#指定したフォルダの画像すべてに対して実行
+
+root = './bbpict/go'
+files = os.listdir(path = root)
+filesSorted = sorted(files)
+filesSorted.remove('.DS_Store')
+
+for f in filesSorted:
+    openFileName = os.path.join(root, f)
+    print()
+    print(openFileName)
+    res = process(openFileName)
+    savedFileName = "result" + f
+    cv2.imwrite(savedFileName, res)
+
+print('Complete')
+print('any key -> exit system')
+cv2.waitKey(0)
