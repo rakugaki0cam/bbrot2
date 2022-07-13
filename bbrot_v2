@@ -192,7 +192,7 @@ def process(filename):
 
 
     #コントラスト調整 (テンプレートマッチングで使用)
-    scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 10)    #alpha:スケールファクタ1.0〜2.0 beta:加算値
+    scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 0)    #alpha:スケールファクタ1.0〜2.0 beta:加算値
     cv2.imshow('scaled', scaled)
     cv2.moveWindow('scaled', 400, 300)
 
