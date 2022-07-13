@@ -188,15 +188,11 @@ def process(filename):
     cv2.imshow('flip', flip)
     cv2.moveWindow('flip', 400, 150)
 
-    #### OCR test #####   
-    t = ocrLcd(src)
-    #周期の入力
-    dt = float(input('1コマの周期 usec = '))
 
 
 
     #コントラスト調整 (テンプレートマッチングで使用)
-    scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 0)    #alpha:スケールファクタ1.0〜2.0 beta:加算値
+    scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 10)    #alpha:スケールファクタ1.0〜2.0 beta:加算値
     cv2.imshow('scaled', scaled)
     cv2.moveWindow('scaled', 400, 300)
 
@@ -205,7 +201,7 @@ def process(filename):
     cv2.imshow('median', median)
     cv2.moveWindow('median', 400, 450)
     # BB弾検出の閾値(DN)
-    min_gray = 50
+    min_gray = 75   #0.12gは白いので70  50~
     max_gray = 255
     ret, threshold = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY_INV) # | cv2.THRESH_OTSU)
     src2 = threshold    #二値データ
@@ -220,7 +216,7 @@ def process(filename):
     #塊の大きさ（面積）
     params.filterByArea = True
     bb_radius_max = 60      #すこし大きめに見積もったBB弾の半径(px)
-    params.minArea = bb_radius_max * bb_radius_max * math.pi * 0.7      #面積なのでr＾2
+    params.minArea = bb_radius_max * bb_radius_max * math.pi * 0.6      #面積なのでr＾2
     params.maxArea = bb_radius_max * bb_radius_max * math.pi
     #円形度でフィルタ(凹面concave)
     params.filterByCircularity = True
@@ -257,6 +253,13 @@ def process(filename):
         print('検出数不足')
         return -1
     
+
+    #### OCR test #####   
+    t = ocrLcd(src)
+    #周期の入力
+    dt = float(input('1コマの周期 usec = '))
+
+
     #座標x位置順でソート
     kps = sorted(keypoints, key=lambda kp: kp.pt[0])    #kp.pt[0]:x座標
 
@@ -397,7 +400,7 @@ def process(filename):
 def ocrLcd(image):
     #OCRで発光周期時間を読み取り
     #
-    lcdImage = crop(image, ( 2000, 800) , ( 1000, 800))
+    lcdImage = crop(image, ( 1800, 800) , ( 1000, 800))
     #cv2.imshow("image0", lcdImage)
     #cv2.waitKey(1) 
     lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
