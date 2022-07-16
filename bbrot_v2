@@ -9,7 +9,6 @@ import numpy as np
 import cv2
 import os
 import matplotlib.pyplot as plt
-
 from PIL import Image
 import sys
 sys.path.append('/path/to/dir')
@@ -54,9 +53,9 @@ def crop(image, pt, size):
     ----------
     image : mat
         切り出し元の画像
-    pt : [number,number]
-        切り取り中心[col,row]
-    size : [number,number]
+    pt : [number, number]
+        切り取り中心[col, row]
+    size : [number, number]
         切り取りサイズ[width, height]
 
     Returns
@@ -73,8 +72,10 @@ def crop(image, pt, size):
     bottom = int(pt[1] + size[1] / 2)
     d = len(image.shape)
     if d <= 2:
+        #grayscale
         return image[top:bottom, left:right]
     else:
+        #color
         return image[top:bottom, left:right, :]
 
 
@@ -92,18 +93,18 @@ def rot(image, rot_in_deg):
     -------
     回転した画像
     """
-    w ,h = 0, 0
+    (h, w) = (0, 0)
     if(len(image.shape)):
         #gray scale
-        w, h = image.shape
+        (h, w) = image.shape
         bg = 255
     else:
         #color
-        w, h, _ = image.shape
+        (h, w) = image.shape[:2]
         bg = (255, 255, 255)
-    center = w / 2.0, h / 2.0
-    mat = cv2.getRotationMatrix2D(center, rot_in_deg, 1)
-    return cv2.warpAffine(image, mat, (w, h), borderValue = bg)
+    center = (w / 2.0, h / 2.0)
+    mat = cv2.getRotationMatrix2D(center, rot_in_deg, scale = 1.0)  #回転のための変換行列を生成
+    return cv2.warpAffine(image, mat, (w, h), borderValue = bg)     #アフィン変換
 
 
 def mask_circle(image, radius):
@@ -150,20 +151,22 @@ def estimate_rot(image, template, pt, size):
     """
     angle = -1
     max = -9999999999
-    cr = crop(image, pt, (size + 15, size + 15 ))
+    ext = 0    #周りを少し広く
+    cr = crop(image, pt, (size + ext, size + ext ))
     cv2.imshow("match BB", cr)
 
     # ぐるぐる回しながら相関が最大となる角度を求める
-    w, h = template.shape[: : -1] 
+    (h, w) = template.shape[: : -1] 
 
     for i in range(-180, 180):
         tp = rot(template, i)
         matchResult = cv2.matchTemplate(cr, tp, cv2.TM_CCOEFF)
-        _, m, _, loc = cv2.minMaxLoc(matchResult)
-        cr2 = cr
+        _, m, _, loc = cv2.minMaxLoc(matchResult)   ###minVal,maxVal,minIndex,maxIndex
+        
         
 
         if(m > max):
+            cr2 = cr.copy()
             max = m
             angle = i
             #角度表示
@@ -228,7 +231,7 @@ def process(filename):
     min_gray = 25   
     max_gray = 255
     ret, threshold = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY_INV) # | cv2.THRESH_OTSU)
-    src2 = threshold    #二値データ
+    src2 = threshold.copy()    #二値データ
     cv2.imshow('threshold', threshold)
     cv2.resizeWindow('threshold', 1296, 75)
 
@@ -277,10 +280,12 @@ def process(filename):
 
 
     #ブロブ検出数の判定
-    if bbcount < 2:
+    if bbcount < 10:
         i = 0
         print('検出数不足')
         return -1
+
+    #途中が抜けた時の処理ーーー未定
 
     ######画像変換の様子だけ見たい時##############
     #cv2.waitKey(0)
@@ -358,9 +363,16 @@ def process(filename):
         scaled =  scaled[top:bottom, left:right]
     else:
         scaled = scaled[top:bottom, left:right, :]
+    #median画像もクロップ
+    d = len(median.shape)
+    if d <= 2:
+        median =  median[top:bottom, left:right]
+    else:
+        median = median[top:bottom, left:right, :]
 
     cv2.imshow("blobs", blobs) 
     cv2.imshow('scaled', scaled)
+    cv2.imshow('median', median)
     cv2.waitKey(1)
 
     #クロップ後の座標修正
@@ -373,17 +385,12 @@ def process(filename):
     template_index = bbcount // 2   #//の答えは整数となる
 
     #基準としたBB弾を切り出してテンプレートとする
-    c = crop(scaled, bbcenter2[template_index], (blobsize[template_index]+ 10, blobsize[template_index] + 10))
-    #cv2.imshow("template_1", c)
-    #cv2.moveWindow('template_1', 0, 200)
-    #cv2.waitKey(1)
-
-
+    c = crop(scaled, bbcenter2[template_index], (blobsize[template_index], blobsize[template_index]))
     #周辺の影の部分をマスク
     mask = int((kps[template_index].size / 2) - 8)#######-5 -> -8
     template = mask_circle(c, mask)
-    center = (int(template.shape[0]/2), int(template.shape[1]/2))
-    template = crop(template, center, (blobsize[template_index] - 10, blobsize[template_index] - 10))
+    center = (int(template.shape[0] / 2), int(template.shape[1] / 2))
+    template = crop(template, center, (mask * 2, mask * 2))
     #2値化オプション??###
     ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU) 
 
@@ -395,8 +402,11 @@ def process(filename):
     anglefirst = 999
     for k in range(bbcount):
         point = bbcenter2[k] #BB中心
-        #角度を推定
-        angle = estimate_rot(scaled, template, point, blobsize[k])
+        #回転角度を解析
+        angle = estimate_rot(scaled, template, point, blobsize[k]) ########scaled
+
+        #回転角がひっくり返っている時の処理　ーーー未定
+
 
         #回転角度の線を表示
         line = 80
@@ -423,10 +433,12 @@ def process(filename):
 
         #回転角の書き込み
         if k >= template_index:
-            kaiten = 1000000.0 / dt /(k * 360 / angleTotal)
-            textRps =  '{:6.1f}rps'.format (kaiten)
-            cv2.putText(blobs, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = white, thickness = 1)
-
+            try:
+                kaiten = 1000000.0 / dt /(k * 360 / angleTotal)
+                textRps =  '{:6.1f}rps'.format (kaiten)
+                cv2.putText(blobs, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = white, thickness = 1)
+            except ZeroDivisionError:
+                kaiten = 0
         result.append((k, point[0], point[1], blobsize[k], angle, da, angleTotal))
 
         cv2.imshow("blobs", blobs) 
@@ -439,7 +451,10 @@ def process(filename):
     # コマ数と回転角
     for r in result[template_index: ]:
         koma = r[0]
-        kaiten = 1000000.0 / dt /(r[0] * 360 / r[6])
+        try:
+            kaiten = 1000000.0 / dt /(r[0] * 360 / r[6])
+        except ZeroDivisionError:
+            kaiten = 0    
         print('{:2d}コマ {:6.1f}rps'.format(koma, kaiten))
     return blobs
 
