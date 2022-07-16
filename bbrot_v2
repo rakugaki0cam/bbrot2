@@ -5,7 +5,6 @@
 
 
 import math
-from cv2 import WINDOW_AUTOSIZE
 import numpy as np
 import cv2
 import os
@@ -38,6 +37,13 @@ cv2.moveWindow('template3', 0, 200)
 
 cv2.namedWindow('match BB', cv2.WINDOW_NORMAL)
 cv2.moveWindow('match BB', 200, 200)
+
+#色の設定
+mazenta = (255, 0, 255)
+yellow  = (0, 255, 255)
+green   = (0, 255, 0)
+darkGreen = (0, 127, 0)
+white   = (255, 255, 255)
 
 
 def crop(image, pt, size):
@@ -219,7 +225,7 @@ def process(filename):
     cv2.resizeWindow('median', 1296, 75)
 
     # BB弾検出の閾値(DN)
-    min_gray = 25   #0.12gは白いので70  50~
+    min_gray = 25   
     max_gray = 255
     ret, threshold = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY_INV) # | cv2.THRESH_OTSU)
     src2 = threshold    #二値データ
@@ -258,9 +264,9 @@ def process(filename):
     #検出器を作動（ブロブを検出する）
     keypoints = detector.detect(src2) 
 
-    #ブロブを円で囲む
+    #ブロブを円形で表示
     blank = np.zeros((1, 1))  
-    blobs = cv2.drawKeypoints(flip, keypoints, blank, (0, 255, 0), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS) 
+    blobs = cv2.drawKeypoints(flip, keypoints, blank, green, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS) 
     #ブロブの個数
     bbcount = len(keypoints)
     print(f'円の個数: {bbcount}')
@@ -289,21 +295,36 @@ def process(filename):
     #座標x位置順でソート
     kps = sorted(keypoints, key=lambda kp: kp.pt[0])    #kp.pt[0]:x座標
 
-    #画像へコマ周期を書き込み
-    v0 = 0.012 / (dt / 1000000) 
-    text = "Circular Blobs:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec  {}".format(len(keypoints), dt, v0, filename)
-    locate = (int(kps[0].pt[0] - 100), int(kps[0].pt[1] + 100))
-    cv2.putText(blobs, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 255), 1)
+    
 
     bbcenter = []
     blobsize = []
     for k in kps:          ###test
         center = (int(k.pt[0]), int(k.pt[1]))
-        cv2.circle(blobs, center, 6,(255, 0, 255), -2)
+        #ブロブの中心を表示
+        cv2.drawMarker(blobs, center, darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300)
         bbcenter.append(center)
         blobsize.append(int(k.size))
 
-    print(bbcenter, blobsize)
+    #BB進行方向の傾斜
+    dY = bbcenter[len(bbcenter) - 1][1] - bbcenter[0][1]
+    dX = bbcenter[len(bbcenter) - 1][0] - bbcenter[0][0]
+    incAngle = -math.degrees(math.atan(dY / dX))   #下向きをマイナス
+
+
+    print('center', bbcenter)
+    print('size', blobsize)
+    print('inclination angle: {}/{} = {:6.3f}deg'.format(dY, dX, incAngle))
+
+    #画像へコマ周期、初速、ファイル名を書き込み
+    v0 = 0.012 / (dt / 1000000) 
+    text = "Circular Blobs:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec  incline:{:6.3f}deg  ({})".format(len(keypoints), dt, v0, incAngle, filename)
+    locate = (int(kps[0].pt[0] - 100), int(kps[0].pt[1] + 100))
+    cv2.putText(blobs, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
+
+
+
+
 
     #ブロブ検出結果から作業用画像をクロップする  #########################################
     #x座標
@@ -377,13 +398,13 @@ def process(filename):
         #角度を推定
         angle = estimate_rot(scaled, template, point, blobsize[k])
 
-        #推定角度軸線を表示
+        #回転角度の線を表示
         line = 80
         rad = math.radians(angle)
         dl = (math.cos(rad) * line, -math.sin(rad) * line)
         pt1 = np.add     (point, dl).astype(np.int32)
         pt2 = np.subtract(point, dl).astype(np.int32)
-        cv2.line(blobs, pt1, pt2, (255,0,255), thickness = 1)
+        cv2.line(blobs, pt1, pt2, mazenta, thickness = 1)
         
         if anglefirst == 999:
             anglefirst = angle
@@ -395,16 +416,16 @@ def process(filename):
         angleBefore = angle
 
         textAngle = '{:4d}deg'.format(angle)
-        cv2.putText(blobs, textAngle, org = (point[0] + 30, point[1] - 60), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = (255, 0, 255), thickness = 1)
+        cv2.putText(blobs, textAngle, org = (point[0] + 30, point[1] - 60), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = mazenta, thickness = 1)
         if k >= 1:
             textDa = '({:3d})'.format(da)
-            cv2.putText(blobs, textDa, org = (point[0] + 55, point[1] - 35), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = (0, 255, 255), thickness = 1)
+            cv2.putText(blobs, textDa, org = (point[0] + 65, point[1] - 30), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = yellow, thickness = 1)
 
         #回転角の書き込み
         if k >= template_index:
             kaiten = 1000000.0 / dt /(k * 360 / angleTotal)
             textRps =  '{:6.1f}rps'.format (kaiten)
-            cv2.putText(blobs, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = (0, 255, 255), thickness = 1)
+            cv2.putText(blobs, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = white, thickness = 1)
 
         result.append((k, point[0], point[1], blobsize[k], angle, da, angleTotal))
 
