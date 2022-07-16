@@ -18,11 +18,26 @@ import pyocr
 import pyocr.builders
 
 #ウインドウの設定
+cv2.namedWindow('flip', cv2.WINDOW_NORMAL)
+cv2.moveWindow('flip', 700, 260)
+
+cv2.namedWindow('scaled', cv2.WINDOW_NORMAL)
+cv2.moveWindow('scaled', 700, 370)
+
+cv2.namedWindow('median', cv2.WINDOW_NORMAL)
+cv2.moveWindow('median', 700, 480)
+
+cv2.namedWindow('threshold', cv2.WINDOW_NORMAL)
+cv2.moveWindow('threshold', 700, 590)
+
+cv2.namedWindow('blobs', cv2.WINDOW_NORMAL)
+cv2.moveWindow('blobs', 0, 0)
+
 cv2.namedWindow('template3', cv2.WINDOW_NORMAL)
-cv2.moveWindow('template3', 0, 350)
+cv2.moveWindow('template3', 0, 200)
 
 cv2.namedWindow('match BB', cv2.WINDOW_NORMAL)
-cv2.moveWindow('match BB', 200, 350)
+cv2.moveWindow('match BB', 200, 200)
 
 
 def crop(image, pt, size):
@@ -139,7 +154,7 @@ def estimate_rot(image, template, pt, size):
         tp = rot(template, i)
         matchResult = cv2.matchTemplate(cr, tp, cv2.TM_CCOEFF)
         _, m, _, loc = cv2.minMaxLoc(matchResult)
-        
+        cr2 = cr
         
 
         if(m > max):
@@ -153,9 +168,9 @@ def estimate_rot(image, template, pt, size):
             #cr2 = cr  ########コピーされない
             topLeft = loc
             bottomRight = (topLeft[0] + w, topLeft[1] + h)
-            cv2.rectangle(cr, topLeft, bottomRight, (255, 0, 255), 1)
+            cv2.rectangle(cr2, topLeft, bottomRight, (255, 0, 255), 1)
             
-            cv2.imshow("match BB", cr)
+            cv2.imshow("match BB", cr2)
             cv2.imshow("template3", tp)
             cv2.waitKey(1)
 
@@ -182,31 +197,35 @@ def process(filename):
     結果をオーバーレイした画像
     """
 
-    src = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+    src = cv2.imread(filename)
+    src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+    point = (src.shape[1] / 2, src.shape[0] / 2)
+
+    size = (src.shape[1], 300)
+    #print(src.shape, point, size)
+    flip = crop(src, point, size)
     #右から撃っているので、左から右への時系列になるように左右反転
-    flip = cv2.flip(src, 1)      # =0:上下反転、>0:左右反転、 <0:上下左右反転
+    flip = cv2.flip(flip, 1)      # =0:上下反転、>0:左右反転、 <0:上下左右反転
     cv2.imshow('flip', flip)
-    cv2.moveWindow('flip', 400, 150)
-
-
-
+    cv2.resizeWindow('flip', 1296, 75)
 
     #コントラスト調整 (テンプレートマッチングで使用)
     scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 0)    #alpha:スケールファクタ1.0〜2.0 beta:加算値
     cv2.imshow('scaled', scaled)
-    cv2.moveWindow('scaled', 400, 300)
-
+    cv2.resizeWindow('scaled', 1296, 75)
     #ノイズ除去し、2値化してブロブ検出用の画像を作成
-    median = cv2.medianBlur(flip, ksize = 5)
+    median = cv2.medianBlur(flip, ksize = 3)  #5
     cv2.imshow('median', median)
-    cv2.moveWindow('median', 400, 450)
+    cv2.resizeWindow('median', 1296, 75)
+
     # BB弾検出の閾値(DN)
-    min_gray = 75   #0.12gは白いので70  50~
+    min_gray = 25   #0.12gは白いので70  50~
     max_gray = 255
     ret, threshold = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY_INV) # | cv2.THRESH_OTSU)
     src2 = threshold    #二値データ
     cv2.imshow('threshold', threshold)
-    cv2.moveWindow('threshold', 400, 600)
+    cv2.resizeWindow('threshold', 1296, 75)
+
 
     #ブロブ（塊）検出の設定
     params = cv2.SimpleBlobDetector_Params()
@@ -215,9 +234,9 @@ def process(filename):
     params.maxThreshold = max_gray  ###
     #塊の大きさ（面積）
     params.filterByArea = True
-    bb_radius_max = 60      #すこし大きめに見積もったBB弾の半径(px)
-    params.minArea = bb_radius_max * bb_radius_max * math.pi * 0.6      #面積なのでr＾2
-    params.maxArea = bb_radius_max * bb_radius_max * math.pi
+    bb_radius = 64      #BB弾の半径(px)
+    params.minArea = (bb_radius - 7) ** 2 * math.pi 
+    params.maxArea = (bb_radius + 5) ** 2 * math.pi
     #円形度でフィルタ(凹面concave)
     params.filterByCircularity = True
     params.minCircularity = 0.5     #0〜1 = 4πS/L^2   S:面積(画素数) L:周囲長　　　円形度が高い->1.0
@@ -241,10 +260,14 @@ def process(filename):
 
     #ブロブを円で囲む
     blank = np.zeros((1, 1))  
-    blobs = cv2.drawKeypoints(flip, keypoints, blank, (255, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS) 
+    blobs = cv2.drawKeypoints(flip, keypoints, blank, (0, 255, 0), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS) 
     #ブロブの個数
     bbcount = len(keypoints)
     print(f'円の個数: {bbcount}')
+    cv2.namedWindow(filename, cv2.WINDOW_NORMAL)
+    cv2.moveWindow(filename, 700, 150)
+    cv2.imshow(filename, blobs)
+    cv2.resizeWindow(filename, 1296, 75)
 
 
     #ブロブ検出数の判定
@@ -252,9 +275,12 @@ def process(filename):
         i = 0
         print('検出数不足')
         return -1
-    
 
-    #### OCR test #####   
+    ######画像変換の様子だけ見たい時##############
+    #cv2.waitKey(0)
+    #return -1 ################
+
+    #### OCR #####   
     t = ocrLcd(src)
     #周期の入力
     dt = float(input('1コマの周期 usec = '))
@@ -265,7 +291,7 @@ def process(filename):
 
     #画像へコマ周期を書き込み
     v0 = 0.012 / (dt / 1000000) 
-    text = "Circular Blobs:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec".format(len(keypoints), dt, v0)
+    text = "Circular Blobs:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec  {}".format(len(keypoints), dt, v0, filename)
     locate = (int(kps[0].pt[0] - 100), int(kps[0].pt[1] + 100))
     cv2.putText(blobs, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 255), 1)
 
@@ -327,13 +353,13 @@ def process(filename):
 
     #基準としたBB弾を切り出してテンプレートとする
     c = crop(scaled, bbcenter2[template_index], (blobsize[template_index]+ 10, blobsize[template_index] + 10))
-    cv2.imshow("template_1", c)
-    cv2.moveWindow('template_1', 0, 200)
-    cv2.waitKey(1)
+    #cv2.imshow("template_1", c)
+    #cv2.moveWindow('template_1', 0, 200)
+    #cv2.waitKey(1)
 
 
     #周辺の影の部分をマスク
-    mask = int((kps[template_index].size / 2) - 5)
+    mask = int((kps[template_index].size / 2) - 8)#######-5 -> -8
     template = mask_circle(c, mask)
     center = (int(template.shape[0]/2), int(template.shape[1]/2))
     template = crop(template, center, (blobsize[template_index] - 10, blobsize[template_index] - 10))
@@ -378,7 +404,7 @@ def process(filename):
         if k >= template_index:
             kaiten = 1000000.0 / dt /(k * 360 / angleTotal)
             textRps =  '{:6.1f}rps'.format (kaiten)
-            cv2.putText(blobs, textRps, org = (point[0] + 0, point[1] + 80), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = (0, 255, 255), thickness = 1)
+            cv2.putText(blobs, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = (0, 255, 255), thickness = 1)
 
         result.append((k, point[0], point[1], blobsize[k], angle, da, angleTotal))
 
