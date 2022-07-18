@@ -246,7 +246,7 @@ def process(filename):
     #ノイズ除去し、2値化してブロブ検出用の画像を作成
     median = cv2.medianBlur(flip, ksize = 3)  #5
     # BB弾検出の閾値(DN)
-    min_gray = 30  
+    min_gray = 35  #30
     max_gray = 255
     ret, threshold = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY_INV) # | cv2.THRESH_OTSU)
     src2 = threshold.copy()    #二値データ
@@ -265,7 +265,7 @@ def process(filename):
     params.maxThreshold = max_gray  ###
     #塊の大きさ（面積）
     params.filterByArea = True
-    bbDia = 120      #BB弾の半径(px)
+    bbDia = 143      #BB弾の半径(px)###########120
     minDia = 18
     maxDia = 10
     params.minArea = (bbDia - minDia) ** 2 * math.pi / 4 * 0.75
