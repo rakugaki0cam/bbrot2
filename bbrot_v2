@@ -5,6 +5,7 @@
 
 
 import math
+from webbrowser import BackgroundBrowser
 import numpy as np
 import cv2
 import os
@@ -238,25 +239,45 @@ def process(filename):
     w = src.shape[1]
     h = 300
     top = (src.shape[0] - h) // 2
-    flip = src[top: top + h, 0: w]
+    flip = src[top: top + h, 0: w-400] # 0: w] ###############スタート付近の白帯をカット（撮影失敗）
     #右から撃っているので、左から右への時系列になるように左右反転
     flip = cv2.flip(flip, 1)      # =0:上下反転、>0:左右反転、 <0:上下左右反転
     #コントラスト調整 (テンプレートマッチングで使用)
     scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 0)    #alpha:スケールファクタ1.0〜2.0 beta:加算値
     #ノイズ除去し、2値化してブロブ検出用の画像を作成
     median = cv2.medianBlur(flip, ksize = 3)  #5
+    #ヒストグラム
+    hist1 = cv2.calcHist(flip, channels = [0], mask = None, histSize = [256], ranges = [0,256])
+    hist2 = cv2.calcHist(scaled, channels = [0], mask = None, histSize = [256], ranges = [0,256])
+    #平坦化
+    clahe = cv2.createCLAHE(clipLimit = 2.0, tileGridSize = (8,8))
+    cl1 = clahe.apply(flip)
+    hist3 = cv2.calcHist(cl1, channels = [0], mask = None, histSize = [256], ranges = [0,256])
+
+
     # BB弾検出の閾値(DN)
     min_gray = 35  #30
     max_gray = 255
-    ret, threshold = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY_INV) # | cv2.THRESH_OTSU)
+    ret, threshold = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY_INV)
     src2 = threshold.copy()    #二値データ
+    #大津の手法
+    ret2, threshold2 = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    src3 = threshold2.copy()    #二値データ
 
     hw = 300
     hwd = 110
     winShow(flip, 'flip', (700, hw), (w // 4, h // 4))  #1/4に縮小
     winShow(scaled, 'scaled', (700, hw + hwd), (w // 4, h // 4))
     winShow(median, 'median', (700, hw + hwd + hwd), (w // 4, h // 4))
-    winShow(threshold, 'threshold', (700, hw + hwd + hwd +hwd), (w // 4, h // 4))
+    winShow(threshold, 'threshold', (700, hw + hwd + hwd + hwd), (w // 4, h // 4))
+    winShow(cl1, 'CLAHE', (700, hw + hwd + hwd + hwd + hwd), (w // 4, h // 4))
+    winShow(threshold2, 'threshold2', (700, hw + hwd + hwd + hwd + hwd + hwd), (w // 4, h // 4))
+    print('OHTU th = ',ret2)
+
+    plt.plot(hist1)  #ヒストグラム
+    plt.plot(hist2)  #ヒストグラム
+    plt.plot(hist3)  #ヒストグラム
+    plt.show()
 
     #ブロブ（塊）検出の設定
     params = cv2.SimpleBlobDetector_Params()
@@ -266,7 +287,7 @@ def process(filename):
     #塊の大きさ（面積）
     params.filterByArea = True
     bbDia = 143      #BB弾の半径(px)###########120
-    minDia = 18
+    minDia = 20
     maxDia = 10
     params.minArea = (bbDia - minDia) ** 2 * math.pi / 4 * 0.75
     params.maxArea = (bbDia + maxDia) ** 2 * math.pi / 4
@@ -304,7 +325,7 @@ def process(filename):
     if bbcount < 10:
         print('検出数不足   any key to go')
         cv2.waitKey(0)
-        return -1
+        return blobs    #円検出だけの画像
 
     #途中が抜けた時の処理ーーー未定
 
