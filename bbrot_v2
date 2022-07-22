@@ -49,7 +49,7 @@ def process(filename):
     pictSize = src.shape
     #撮影対象の大きさ[mm]
     subjectWidthMin = 210   #横方向撮影範囲寸法
-    subjectWidthMax = 300
+    subjectWidthMax = 270
     bbObjectSize = 6        #BB弾の物理寸法
     #BB弾の推定サイズ[pixel]の計算
     bbPixelMin = int(pictSize[1] / subjectWidthMax * bbObjectSize)
@@ -68,8 +68,9 @@ def process(filename):
     flip = cv2.flip(flip, 1)      # =0:上下反転、>0:左右反転、 <0:上下左右反転
     #コントラスト調整 (テンプレートマッチングで使用)
     scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 0)    #alpha:スケールファクタ1.0〜2.0 beta:加算値
-    #ノイズ除去し、2値化してブロブ検出用の画像を作成
-    median = cv2.medianBlur(flip, ksize = 3)  #5
+    #ノイズ除去してブロブ検出用の画像を作成
+    median = cv2.medianBlur(flip, ksize = 9) #ksizeは奇数 円の検出大きさに関わってくる
+
     #ヒストグラム
     hist1 = cv2.calcHist(flip, channels = [0], mask = None, histSize = [256], ranges = [0,256])
     hist2 = cv2.calcHist(scaled, channels = [0], mask = None, histSize = [256], ranges = [0,256])
@@ -79,25 +80,19 @@ def process(filename):
     hist3 = cv2.calcHist(cl1, channels = [0], mask = None, histSize = [256], ranges = [0,256])
 
     # BB弾検出の閾値
-    #min_gray = 35  #30　撮影条件によって最適値が異なる
-    min_gray = 0    #大津の時
-    max_gray = 255
-    #ret, threshold = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY)
-    #src2 = threshold.copy()    #二値データ
-    #大津の手法
-    ret2, threshold2 = cv2.threshold(median, min_gray, max_gray, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-    srcOtsu = threshold2.copy()    #二値データ
-    min_gray = ret2     # 大津の閾値を使用
+    minGray = 0
+    maxGray = 255
+    #大津の手法　minGrayに大津の閾値が入る
+    minGray, threshold = cv2.threshold(median, minGray, maxGray, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
     hw = 300    #表示座標y
     hwd = 110
     winShow(flip, 'flip', (700, hw), (w // 4, h // 4))  #1/4に縮小
     winShow(scaled, 'scaled', (700, hw + hwd), (w // 4, h // 4))
     winShow(median, 'median', (700, hw + hwd + hwd), (w // 4, h // 4))
-    #winShow(threshold, 'threshold', (700, hw + hwd + hwd + hwd), (w // 4, h // 4))
+    winShow(threshold, 'threshold', (700, hw + hwd + hwd + hwd), (w // 4, h // 4))
     winShow(cl1, 'CLAHE', (700, hw + hwd + hwd + hwd + hwd), (w // 4, h // 4))
-    winShow(threshold2, 'threshold2', (700, hw + hwd + hwd + hwd + hwd + hwd), (w // 4, h // 4))
-    print('OHTU threshold = ',ret2)
+    print('OHTU threshold = ',minGray)
 
     '''
     plt.plot(hist1)  #ヒストグラム
@@ -107,7 +102,7 @@ def process(filename):
     '''
 
     #大津を使用 (srcOtsu, src2, median)
-    keypoints = blobsDetect(srcOtsu, min_gray, max_gray, bbPixelMin, bbPixelMax)
+    keypoints = blobsDetect(threshold, minGray, maxGray, bbPixelMin, bbPixelMax)
 
     #ブロブを円形で表示
     blobs = cv2.drawKeypoints(flip, keypoints, None, green, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
@@ -174,7 +169,14 @@ def process(filename):
     #### OCR #####   
     ocrLcd(src)
     #周期の入力
-    dt = float(input('1コマの周期 usec = '))
+    while(1):
+        inpt = input('1コマの周期 usec = ')
+        if inpt == '':
+            continue
+        dt = float(inpt)
+        if dt > 0:
+         break
+
 
     #画像へコマ周期、初速、ファイル名を書き込み
     v0 = 0.012 / (dt / 1000000) 
@@ -232,19 +234,18 @@ def process(filename):
     for b in bbcenter:
         bbcenter2.append((b[1][0] - left, b[1][1] - top))
 
+
     #左から数えてtemplate_index目のBB弾を基準とする
     #カメラ撮影光軸中心付近
     templateIndex = bbcount // 2   #//の答えは整数となる
 
     #基準としたBB弾を切り出してテンプレートとする
-    c = crop(scaled, bbcenter2[templateIndex], (bbcenter[templateIndex][2], bbcenter[templateIndex][2]))
-    #周辺の影の部分をマスク
-    mask = int((kps[templateIndex].size / 2) - 8)####### -5 -> -8
-    template = mask_circle(c, mask)
-    center = (int(template.shape[0] / 2), int(template.shape[1] / 2))
-    template = crop(template, center, (mask * 2, mask * 2))
+    
+    TempD = int(kps[templateIndex].size * 0.93)     #周辺の影の部分をマスク
+    imgc = crop(scaled, bbcenter2[templateIndex], (TempD, TempD))
+    template = mask_circle(imgc, TempD)
     #2値化オプション??###
-    ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU) 
+    #ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU) 
 
     #検出したBB弾すべてに角度推定を実行する
     print('計算開始')
@@ -254,7 +255,7 @@ def process(filename):
     for k in range(bbcount):
         point = bbcenter2[k] #BB中心
         #回転角度を解析
-        angle = estimate_rot(scaled, template, point, bbcenter[k][2]) ########scaled
+        angle = estimate_rot(scaled, template, point, kps[templateIndex].size) #bbcenter[k][2]) ########scaled
 
         #回転角がひっくり返っている時の処理　ーーー未定
 
@@ -283,7 +284,6 @@ def process(filename):
             cv2.putText(blobs, textDa, org = (point[0] + 65, point[1] - 30), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = yellow, thickness = 1)
 
         #回転角の書き込み
-        #中心振り分けで計算してみるーーーーーー未定
         if k > templateIndex:
             try:
                 kaiten = 1000000.0 / dt /(k * 360 / angleTotal)
@@ -346,7 +346,7 @@ def blobsDetect(image, minGray, maxGray, bbPixelMin, bbPixelMax):
     params.maxThreshold = maxGray
     #塊の大きさ（面積）
     params.filterByArea = True
-    shade = 0.9      #影、インク模様の面積分の補正
+    shade = 0.95      #影、インク模様の面積分の補正
     params.minArea = bbPixelMin ** 2 * math.pi / 4 * shade      ##小さい円が入りすぎ＃＃＃＃＃＃＃＃＃＃＃
     params.maxArea = bbPixelMax ** 2 * math.pi / 4
     #円形度でフィルタ(凹面concave)
@@ -394,7 +394,7 @@ def estimate_rot(image, template, pt, size):
     """
     angle = -1
     max = 1
-    ext = 0    #周りを少し広く
+    ext = 10    #周りを少し広く
     cr = crop(image, pt, (size + ext, size + ext ))
     cv2.imshow("match BB", cr)
     (w, h) = template.shape[: : -1] 
@@ -567,7 +567,7 @@ def ocrLcd(image):
     return txt
 
 
-def rot(image, rot_in_deg):
+def rot(image, degree):
     """
     画像を画像中央を中心に回転させる。回転により生じる背景は白で塗りつぶし。
     
@@ -575,8 +575,9 @@ def rot(image, rot_in_deg):
     ----------
     image : mat
         元画像
-    rot_in_deg : float
+    degree : float
         回転角度(deg)
+
     Returns
     -------
     回転した画像
@@ -591,33 +592,35 @@ def rot(image, rot_in_deg):
         (h, w) = image.shape[:2]
         bg = (255, 255, 255)
     center = (w / 2.0, h / 2.0)
-    mat = cv2.getRotationMatrix2D(center, rot_in_deg, scale = 1.0)  #回転のための変換行列を生成
+    mat = cv2.getRotationMatrix2D(center, degree, scale = 1.0)  #回転のための変換行列を生成
     return cv2.warpAffine(image, mat, (w, h), borderValue = bg)     #アフィン変換
 
 
-def mask_circle(image, radius):
+def mask_circle(image, dia):
     """
-    円の外側を白で塗りつぶす。
+    円形でマスク。
 
     Parameters
     ----------
     image : mat
-        塗りつぶし対象の画像
+        画像
+    dia : int
+        円の直径(px)
 
-    radius : int
-        円の半径(px)
     Returns
     -------
-    塗りつぶした画像
+    マスクした画像
     """
-    mask = np.zeros(image.shape, np.uint8)
-    center = (int(mask.shape[0]/2), int(mask.shape[1]/2))
-    cv2.circle(mask, center, radius, 1, -1)
-    ret = image * mask
-    bg = np.ones(image.shape, np.uint8) * 255
-    cv2.circle(bg, center, radius, 0, -1)
-    return ret + bg
+    #マスク画像の元を作成（白一面）
+    mask = np.full(image.shape[:2], 255, dtype = image.dtype)
 
+    #白い画像の中心に黒い円を描画する。
+    centerX = image.shape[1] // 2
+    centerY = image.shape[0] // 2
+    cv2.circle(mask, (centerX, centerY), (dia // 2), color = 0, thickness = - 1)
+    #cv2.imshow('TMask', mask)
+    #cv2.waitKey(0)
+    return cv2.bitwise_or(image, mask)
 
 
 def winShow(image, name, pt, size):
