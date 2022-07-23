@@ -44,42 +44,35 @@ def process(filename):
         結果をオーバーレイした画像
     """
 
-    src = cv2.imread(filename)
+    image = cv2.imread(filename)
     #画像サイズと推定BB弾寸法（撮影範囲による）
-    pictSize = src.shape
     #撮影対象の大きさ[mm]
     subjectWidthMin = 210   #横方向撮影範囲寸法
     subjectWidthMax = 270
     bbObjectSize = 6        #BB弾の物理寸法
     #BB弾の推定サイズ[pixel]の計算
-    bbPixelMin = int(pictSize[1] / subjectWidthMax * bbObjectSize)
-    bbPixelMax = int(pictSize[1] / subjectWidthMin * bbObjectSize)
-    print('画像サイズ (x:', pictSize[1], 'y:', pictSize[0], ')')
+    bbPixelMin = int(image.shape[1] / subjectWidthMax * bbObjectSize)
+    bbPixelMax = int(image.shape[1] / subjectWidthMin * bbObjectSize)
+    print('画像サイズ (x:', image.shape[1], 'y:', image.shape[0], ')')
     print('BB弾の大きさ', bbPixelMin, '~', bbPixelMax, 'pix')
 
     #グレースケール化(OCRで使用)
-    src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     #高さを中央付近300pxにクロップ
-    w = src.shape[1]
+    w = image.shape[1]
     h = 300     #切り取り画像の縦ピクセル数
-    top = (src.shape[0] - h) // 2
-    flip = src[top: top + h, 0: w-400] # 0: w] ###############スタート付近の白帯をカット（撮影失敗）
+    top = (image.shape[0] - h) // 2
+    flip = image[top: top + h, 0: w   - 400] # 0: w] ###############スタート付近の白帯をカット（撮影失敗）
     #右から撃っているので、左から右への時系列になるように左右反転
-    flip = cv2.flip(flip, 1)      # =0:上下反転、>0:左右反転、 <0:上下左右反転
+    flip = cv2.flip(flip, 1)                                        # =0:上下反転、>0:左右反転、 <0:上下左右反転
     #コントラスト調整 (テンプレートマッチングで使用)
-    scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 0)    #alpha:スケールファクタ1.0〜2.0 beta:加算値
+    scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 0)       #alpha:スケールファクタ1.0〜2.0 beta:加算値
     #ノイズ除去してブロブ検出用の画像を作成
-    median = cv2.medianBlur(flip, ksize = 9) #ksizeは奇数 円の検出大きさに関わってくる
-
-    #ヒストグラム
-    hist1 = cv2.calcHist(flip, channels = [0], mask = None, histSize = [256], ranges = [0,256])
-    hist2 = cv2.calcHist(scaled, channels = [0], mask = None, histSize = [256], ranges = [0,256])
+    median = cv2.medianBlur(flip, ksize = 9)                        #ksizeは奇数 円の検出大きさに関わってくる
     #平坦化
     clahe = cv2.createCLAHE(clipLimit = 2.0, tileGridSize = (8,8))
     cl1 = clahe.apply(flip)
-    hist3 = cv2.calcHist(cl1, channels = [0], mask = None, histSize = [256], ranges = [0,256])
-
-    # BB弾検出の閾値
+    #二値化の閾値
     minGray = 0
     maxGray = 255
     #大津の手法　minGrayに大津の閾値が入る
@@ -94,6 +87,10 @@ def process(filename):
     winShow(cl1, 'CLAHE', (700, hw + hwd + hwd + hwd + hwd), (w // 4, h // 4))
     print('OHTU threshold = ',minGray)
 
+    #ヒストグラム
+    hist1 = cv2.calcHist(flip, channels = [0], mask = None, histSize = [256], ranges = [0,256])
+    hist2 = cv2.calcHist(scaled, channels = [0], mask = None, histSize = [256], ranges = [0,256])
+    hist3 = cv2.calcHist(cl1, channels = [0], mask = None, histSize = [256], ranges = [0,256])
     '''
     plt.plot(hist1)  #ヒストグラム
     plt.plot(hist2)  #ヒストグラム
@@ -101,7 +98,7 @@ def process(filename):
     plt.show()
     '''
 
-    #大津を使用 (srcOtsu, src2, median)
+    #ブロブ検出
     keypoints = blobsDetect(threshold, minGray, maxGray, bbPixelMin, bbPixelMax)
 
     #ブロブを円形で表示
@@ -146,10 +143,11 @@ def process(filename):
     print('BB size ave ={:6.2f}'.format(bbAve))
     index = 0
     for k in kps:
+        #小さすぎるものを除外する
         if (k.size > bbAve * 1.05) or (k.size < bbAve * 0.97):
             print('No.', index, 'サイズ不適')
             #データ削除
-
+############################
             
         index += 1
 
@@ -160,14 +158,14 @@ def process(filename):
     incAngle = -math.degrees(math.atan(dY / dX))   #下向きをマイナス表示
     print('BB n,(x,y),size', bbcenter)
     print('inclination angle: {:6.3f}/{:6.1f} = {:6.3f}deg'.format(dY, dX, incAngle))
-    #検出サイズでソート
-    kps = sorted(keypoints, key=lambda kp: kp.pt[0])    #kp.pt[0]:x座標
+
+    
 
 
 
 
     #### OCR #####   
-    ocrLcd(src)
+    ocrLcd(image)
     #周期の入力
     while(1):
         inpt = input('1コマの周期 usec = ')
@@ -241,11 +239,17 @@ def process(filename):
 
     #基準としたBB弾を切り出してテンプレートとする
     
-    TempD = int(kps[templateIndex].size * 0.93)     #周辺の影の部分をマスク
-    imgc = crop(scaled, bbcenter2[templateIndex], (TempD, TempD))
-    template = mask_circle(imgc, TempD)
+    tempD = int(kps[templateIndex].size * 0.93)     #周辺の影の部分をマスク
+    imgc = crop(scaled, bbcenter2[templateIndex], (tempD, tempD))
+    #imgc = crop(median, bbcenter2[templateIndex], (tempD, tempD))###特徴点検出のとき####################################
+    template = mask_circle(imgc, tempD)
     #2値化オプション??###
     #ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU) 
+
+#########特徴点検出用テンプレート（周辺画像までいれて広くしないと特徴点が検出されない）
+    template2 = crop(median, bbcenter2[templateIndex],(tempD * 3, tempD * 3))
+#####################特徴点検出法
+
 
     #検出したBB弾すべてに角度推定を実行する
     print('計算開始')
@@ -258,6 +262,12 @@ def process(filename):
         angle = estimate_rot(scaled, template, point, kps[templateIndex].size) #bbcenter[k][2]) ########scaled
 
         #回転角がひっくり返っている時の処理　ーーー未定
+
+
+###################
+        #特徴点検出法
+        #angle2 = contourMatch(median, template2, point, kps[templateIndex].size)
+####################
 
 
         #回転角度の線を表示
@@ -277,10 +287,10 @@ def process(filename):
         angleTotal = angle - anglefirst
         angleBefore = angle
 
-        textAngle = '{:4d}deg'.format(angle)
+        textAngle = '{:6.1f}deg'.format(angle)
         cv2.putText(blobs, textAngle, org = (point[0] + 30, point[1] - 60), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = mazenta, thickness = 1)
         if k >= 1:
-            textDa = '({:3d})'.format(da)
+            textDa = '({:5.1f})'.format(da)
             cv2.putText(blobs, textDa, org = (point[0] + 65, point[1] - 30), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = yellow, thickness = 1)
 
         #回転角の書き込み
@@ -300,7 +310,7 @@ def process(filename):
         result.append((k, point[0], point[1], bbcenter[k][2], angle, da, angleTotal))
 
         cv2.imshow("blobs", blobs) 
-        cv2.waitKey(1) 
+        cv2.waitKey(1) #####################
 
     # 結果の表示など
     for i, d in enumerate(result):
@@ -419,36 +429,133 @@ def estimate_rot(image, template, pt, size):
 
 
     # ぐるぐる回しながら相関が最大となる角度を求める
-    for i in range(-180, 180):
-        tp = rot(template, i)
+    denomi = 1      #角度計算のステップ　1度/denomi
+    matchAngle = 0
+    for i in range(-180 * denomi, 180 * denomi):
+        angle = i / denomi
+        tp = rot(template, angle)
         matchResult = cv2.matchTemplate(cr, tp, cv2.TM_CCOEFF)
         _, maxVal, _, maxLoc = cv2.minMaxLoc(matchResult)   ###minVal,maxVal,minIndex,maxIndex
         
         if(maxVal > max):
             cr2 = cr.copy()
+            matchAngle = angle
             max = maxVal
-            angle = i
-            #角度表示
-            cv2.putText(tp, str(i), org = (0, 15), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
-            # org は左下の座標
-            #マッチ値表示
-            cv2.putText(tp, str(int(max)), org = (0, 100), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
-            topLeft = maxLoc
-            bottomRight = (topLeft[0] + w, topLeft[1] + h)
-            cv2.rectangle(cr2, topLeft, bottomRight, (255, 0, 255), 1)
+            if denomi < 3:
+                #角度表示
+                cv2.putText(tp, str(matchAngle), org = (0, 15), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
+                # org は左下の座標
+                #マッチ値表示
+                cv2.putText(tp, str(int(max)), org = (0, 100), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
+                topLeft = maxLoc
+                bottomRight = (topLeft[0] + w, topLeft[1] + h)
+                cv2.rectangle(cr2, topLeft, bottomRight, (255, 0, 255), 1)
             
-            cv2.imshow("match BB", cr2)
-            cv2.imshow("template3", tp)
-            cv2.waitKey(1)
+                cv2.imshow("match BB", cr2)
+                cv2.imshow("template3", tp)
+                cv2.waitKey(1)
 
-            #マッチ　類似度のヒートマップ
-            #fig, ax = plt.subplots(figsize=(10, 5))
-            #im = ax.imshow(matchResult, cmap="jet")
-            #plt.show()
+                #マッチ　類似度のヒートマップ
+                #fig, ax = plt.subplots(figsize=(10, 5))
+                #im = ax.imshow(matchResult, cmap="jet")
+                #plt.show()
             
 
-    print(angle , '° Match value:' ,max)
-    return angle
+    print(matchAngle , '° Match value:' ,max)
+    return matchAngle
+
+
+
+def contourMatch(image, template, pt, size):
+    """
+    特徴点検出にて角度を求める
+
+    Parameters
+    ----------
+    image : mat
+        BB弾列の画像
+    template : mat
+        テンプレート画像
+    pt : [number, number]
+        推定対象の中心位置[col,row]
+    size : any
+        比較するBB画像の直径 px 
+
+    Returns
+    -------
+    回転角 -180~+180(deg)#####################
+    """
+
+    ext = 200    #周りを少し広く
+    cr = crop(image, pt, (size + ext, size + ext ))
+    ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    ret, cr = cv2.threshold(cr, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
+    #cv2.imshow("match BB2", template)
+    match(template, cr)
+    return
+
+
+def match(from_img, to_img):
+    # 特徴点抽出 (AKAZE)
+    detector = cv2.ORB_create()
+    # 各画像の特徴点を取る
+    fromKeypoints, from_descriptions = detector.detectAndCompute(from_img, None)
+    toKeypoints, to_descriptions = detector.detectAndCompute(to_img, None)
+    
+    # 2つの特徴点をマッチさせる
+    #bf_matcher = cv2.BFMatcher_create(cv2.NORM_HAMMING, True)
+    bfMatcher = cv2.BFMatcher(cv2.NORM_HAMMING)
+    #matches = bf_matcher.match(from_descriptions, to_descriptions)
+    matches = bfMatcher.knnMatch(from_descriptions, to_descriptions, k = 2)
+
+    # レシオテストを行う。
+    goodMatches = []
+    for first, second in matches:
+        if first.distance < second.distance * 0.66:
+            goodMatches.append(first)
+
+    # 特徴点を同士をつなぐ
+    match_img = cv2.drawMatches(from_img, fromKeypoints, to_img, toKeypoints, goodMatches,  None, flags=2)
+    
+    cv2.imshow('keypoint match', match_img)
+    cv2.waitKey(1)
+
+
+    fromKp = []
+    for f in fromKeypoints[:len(goodMatches)]:
+        fromKp.append([f.pt[0],f.pt[1]])
+    fromKp = np.reshape(fromKp, (-1, 1, 2))
+
+    toKp = []
+    for t in toKeypoints[:len(goodMatches)]:
+        toKp.append([t.pt[0],t.pt[1]])
+    toKp   = np.reshape(toKp, (-1, 1, 2))
+
+    aA, inliers = cv2.estimateAffinePartial2D(fromKp, toKp)     #数が合わないとダメ？
+
+    #平行移動量
+    mM = aA[:2, :2]
+    t = aA[:, 2]
+    #回転角度
+    degree = np.rad2deg(-np.arctan2(aA[0, 1], aA[0, 0]))
+    print('特徴点　回転角度＝' , degree)
+    #print(' M', mM, 't', t)
+
+
+    return match_img, (fromKeypoints, from_descriptions, toKeypoints, to_descriptions, matches)
+
+
+
+# 画像の表示
+def display(img, output_file_path):
+    cv2.imwrite(output_file_path, img)
+    plt.imshow(plt.imread(output_file_path))
+    plt.axis('off')
+    plt.show()
+
+
+
 
 
 
