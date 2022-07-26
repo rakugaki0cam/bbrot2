@@ -6,7 +6,7 @@
 #ライブラリの読み込み
 import math
 from webbrowser import BackgroundBrowser
-from cv2 import DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
+from cv2 import COLOR_GRAY2BGR, DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
 import numpy as np
 import cv2
 import os
@@ -99,7 +99,8 @@ def process(filename):
     plt.show()
     '''
 
-#############################
+
+#############################　ハフ円検出　############################
     cv2.waitKey(1)
     #円検出
     circles = cv2.HoughCircles(median, cv2.HOUGH_GRADIENT, dp = 1.0, minDist = 200, param1 = 100, param2 = 40, minRadius = bbPixelMin // 2-10, maxRadius = bbPixelMax // 2+20)
@@ -112,73 +113,98 @@ def process(filename):
     cirImg = cv2.cvtColor(cirImg, cv2.COLOR_GRAY2BGR)
     for c in circles:
         # 円周を描画する
-        cv2.circle(cirImg, (c[0], c[1]), c[2], green, 2)
+        cv2.circle(cirImg, (c[0], c[1]), c[2], green, thickness = 1)
         # 中心点を描画する
-        cv2.drawMarker(cirImg, (c[0], c[1]), green, markerType = cv2.MARKER_CROSS, markerSize = 250, thickness = 2)
+        cv2.drawMarker(cirImg, (c[0], c[1]), darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
 
-    winShow(cirImg, filename + ' hough', (700, 190), (w // 4, h // 4))  #1/4に縮小
-    cv2.waitKey(1)
-
-    bbcount2 = len(circles)
-    print('Hough circles: ', bbcount2)
+    #円の個数
+    bbcountH = len(circles)
+    print(f'Hough circles: {bbcountH}')
     #x位置順にソート
     circles = sorted(circles, key=lambda x: x[0])    #x[0]:x座標
-    print(circles)
+    #BBデータを整理
+    bbDataH = []        #(n, x, y, d)
+    bbnum = 0
+    for c in circles:
+        bbDataH.append([bbnum, c[0], c[1], c[2] * 2])
+        bbnum += 1
 
-#############################
+    winShow(cirImg, filename + ' hough', (700, 190), (w // 4, h // 4))  #1/4に縮小
+    print(bbDataH)
+    cv2.waitKey(1)
 
 
-
-    blobs = flip.copy()
-    blobs = cv2.cvtColor(blobs, cv2.COLOR_GRAY2BGR)
-
+############################# ブロブ円検出 ######################################
+    blobImg = flip.copy()
+    blobImg = cv2.cvtColor(blobImg, cv2.COLOR_GRAY2BGR)
     #ブロブ検出
     keypoints = blobsDetect(threshold, minGray, maxGray, bbPixelMin, bbPixelMax)
 
     #ブロブを円形で表示
-    blobs = cv2.drawKeypoints(blobs, keypoints, None, green, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    blobImg = cv2.drawKeypoints(blobImg, keypoints, None, green, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
     #ブロブの個数
-    bbcount = len(keypoints)
-    print(f'blobs 円の個数: {bbcount}')
-    winShow(blobs, filename + ' blob', (700, 190), (w // 4, h // 4))  #1/4に縮小
+    bbcountB = len(keypoints)
+    print(f'blob circles: {bbcountB}')
+    #x位置順にソート
+    keypoints = sorted(keypoints, key=lambda kp: kp.pt[0])    #kp.pt[0]:x座標
+    #BBデータを整理
+    bbDataB = []        #(n, x, y, d)
+    bbnum = 0
+    for k in keypoints:
+        point = (int(k.pt[0]), int(k.pt[1]))
+        #ブロブの中心を表示
+        cv2.drawMarker(blobImg, point, darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
+        bbDataB.append([bbnum, point[0], point[1], int(k.size)])
+        bbnum += 1
+
+    winShow(blobImg, filename + ' blob', (700, 190), (w // 4, h // 4))  #1/4に縮小
+    print(bbDataB)
+    cv2.waitKey(1)
+
+   #kps = keypoints ###################################修正が必要
 
     ######画像変換の様子だけ見たい時##############
-    #cv2.waitKey(1)
-    print('brobs')
     #return -1 ################
  
+    ######################### 検出方法を選択 #####################################################
+    #detectMethod = "Blobs"
+    detectMethod = "Hough"
+
+    if detectMethod == 'Blobs':
+        #Blob円検出による
+        bbcount = bbcountB      #n max
+        bbData = bbDataB        
+        bbImg = blobImg
+    else:
+        #Hough円検出による
+        bbcount = bbcountH      
+        bbData = bbDataH
+        bbImg = cirImg
+
+
+
+#途中が抜けた時の処理ーーー未定
+#小さいものの除外 ーーーー未定
+
 
     #ブロブ検出数の判定
     if bbcount < 10:
         print('検出数不足   any key to next')
         cv2.waitKey(0)
-        return blobs    #円検出だけの画像
+        return bbImg    #円検出だけの画像
 
-    #途中が抜けた時の処理ーーー未定
-    #小さいものの除外 ーーーー未定
-
-    #座標x位置順でソート
-    kps = sorted(keypoints, key=lambda kp: kp.pt[0])    #kp.pt[0]:x座標
-
-    bbData = []
-    bbnum = 0
-    for k in kps:          ###test
-        center = (int(k.pt[0]), int(k.pt[1]))
-        #ブロブの中心を表示
-        cv2.drawMarker(blobs, center, darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300)
-        bbData.append((bbnum, center, int(k.size)))
-        bbnum += 1
 
     #平均サイズ
     sumSize = 0
-    for k in kps:
-        sumSize = sumSize + k.size
+    for b in bbData:
+        sumSize += b[3]
     bbAve = sumSize / bbcount    
     print('BB size ave ={:6.2f}'.format(bbAve))
     index = 0
-    for k in kps:
+    for b in bbData:
         #小さすぎるものを除外する
-        if (k.size > bbAve * 1.05) or (k.size < bbAve * 0.97):
+        if (b[3] > bbAve * 1.05) or (b[3] < bbAve * 0.97):
             print('No.', index, 'サイズ不適')
             #データ削除
 ############################
@@ -187,8 +213,8 @@ def process(filename):
 
 
     #BB進行軸線の傾斜角度
-    dY = kps[bbcount - 1].pt[1] - kps[0].pt[1]
-    dX = kps[bbcount - 1].pt[0] - kps[0].pt[0]
+    dY = bbData[bbcount - 1][2] - bbData[0][2]
+    dX = bbData[bbcount - 1][1] - bbData[0][1]
     incAngle = -math.degrees(math.atan(dY / dX))   #下向きをマイナス表示
     print('BB n,(x,y),size', bbData)
     print('inclination angle: {:6.3f}/{:6.1f} = {:6.3f}deg'.format(dY, dX, incAngle))
@@ -212,36 +238,36 @@ def process(filename):
 
     #画像へコマ周期、初速、ファイル名を書き込み
     v0 = 0.012 / (dt / 1000000) 
-    text = "Circular Blobs:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec  incline:{:6.3f}deg  ({})".format(len(keypoints), dt, v0, incAngle, filename)
-    locate = (int(kps[0].pt[0]), int(kps[0].pt[1] + 100))
-    cv2.putText(blobs, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
+    text = "{} circles:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec  incline:{:6.3f}deg  ({})".format(detectMethod, len(keypoints), dt, v0, incAngle, filename)
+    locate = (int(bbData[0][1]), int(bbData[0][2] + 100))
+    cv2.putText(bbImg, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
 
 
     #ブロブ検出結果から作業用画像をクロップする  #########################################
     #x座標
     offsetX = 250
-    left = bbData[0][1][0] - offsetX
+    left = bbData[0][1] - offsetX
     if left < 0:
         left = 0
-    right = bbData[bbcount - 1][1][0] + offsetX
-    if right > blobs.shape[1]:              #(y_size, x_size, color)
-        right = blobs.shape[1]
+    right = bbData[bbcount - 1][1] + offsetX
+    if right > bbImg.shape[1]:              #(y_size, x_size, color)
+        right = bbImg.shape[1]
     #y座標
     offsetY = 25
     bby = sorted(bbData, key = lambda x: x[1])    #y座標でソート
-    top = bby[0][1][1] - bbData[0][2] - offsetY
+    top = bby[0][2] - bbData[0][3] - offsetY
     if top < 0:
         top = 0
-    bottom = bby[bbcount - 1][1][1]  + bbData[0][2] + offsetY  #(y_size, x_size, color)
-    if bottom > blobs.shape[0]:     
-        bottom = blobs.shape[0]
+    bottom = bby[bbcount - 1][2]  + bbData[0][3] + offsetY  #(y_size, x_size, color)
+    if bottom > bbImg.shape[0]:     
+        bottom = bbImg.shape[0]
 
     #ブロブ検出＆作業書き込み用画像をクロップ
-    d = len(blobs.shape)
+    d = len(bbImg.shape)
     if d <= 2:
-        blobs =  blobs[top:bottom, left:right]
+        bbImg =  bbImg[top:bottom, left:right]
     else:
-        blobs = blobs[top:bottom, left:right, :]
+        bbImg = bbImg[top:bottom, left:right, :]
     #マッチ検出用画像もクロップ
     d = len(scaled.shape)
     if d <= 2:
@@ -251,19 +277,21 @@ def process(filename):
     #median画像もクロップ
     d = len(median.shape)
     if d <= 2:
+        #gray
         median =  median[top:bottom, left:right]
     else:
+        #color
         median = median[top:bottom, left:right, :]
 
-    cv2.imshow("blobs", blobs) 
+    cv2.imshow("BB image", bbImg) 
     cv2.imshow('scaled', scaled)
     cv2.imshow('median', median)
     cv2.waitKey(1)
 
     #クロップ後の座標修正
-    bbcenter2 = []
+    bbcenter2 = []  #クリップ後の座標
     for b in bbData:
-        bbcenter2.append((b[1][0] - left, b[1][1] - top))
+        bbcenter2.append((b[1] - left, b[2] - top))
 
 
     #左から数えてtemplate_index目のBB弾を基準とする
@@ -272,15 +300,15 @@ def process(filename):
 
     #基準としたBB弾を切り出してテンプレートとする
     
-    tempD = int(kps[templateIndex].size * 0.93)     #周辺の影の部分をマスク
-    imgc = crop(scaled, bbcenter2[templateIndex], (tempD, tempD))
+    tpDia = int(bbData[templateIndex][3] * 0.93)     #周辺の影の部分をマスク
+    imgc = crop(scaled, bbcenter2[templateIndex], (tpDia, tpDia))
     #imgc = crop(median, bbcenter2[templateIndex], (tempD, tempD))###特徴点検出のとき####################################
-    template = mask_circle(imgc, tempD)
+    template = mask_circle(imgc, tpDia)
     #2値化オプション??###
     #ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU) 
 
 #########特徴点検出用テンプレート（周辺画像までいれて広くしないと特徴点が検出されない）
-    template2 = crop(median, bbcenter2[templateIndex],(tempD * 3, tempD * 3))
+    template2 = crop(median, bbcenter2[templateIndex],(tpDia * 3, tpDia * 3))
 #####################特徴点検出法
 
 
@@ -292,14 +320,14 @@ def process(filename):
     for k in range(bbcount):
         point = bbcenter2[k] #BB中心
         #回転角度を解析
-        angle = estimate_rot(scaled, template, point, kps[templateIndex].size) #bbcenter[k][2]) ########scaled
+        angle = estimate_rot(scaled, template, point, bbData[templateIndex][3]) ########scaled
 
         #回転角がひっくり返っている時の処理　ーーー未定
 
 
 ###################
         #特徴点検出法
-        #angle2 = contourMatch(median, template2, point, kps[templateIndex].size)
+        #angle2 = contourMatch(median, template2, point, bbData[templateIndex][3])
 ####################
 
 
@@ -309,7 +337,7 @@ def process(filename):
         dl = (math.cos(rad) * lineLen, -math.sin(rad) * lineLen)
         pt1 = np.add     (point, dl).astype(np.int16)
         pt2 = np.subtract(point, dl).astype(np.int16)
-        cv2.line(blobs, pt1, pt2, mazenta, thickness = 1)
+        cv2.line(bbImg, pt1, pt2, mazenta, thickness = 1)
         
         if anglefirst == 999:
             anglefirst = angle
@@ -321,28 +349,28 @@ def process(filename):
         angleBefore = angle
 
         textAngle = '{:6.1f}deg'.format(angle)
-        cv2.putText(blobs, textAngle, org = (point[0] + 30, point[1] - 60), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = mazenta, thickness = 1)
+        cv2.putText(bbImg, textAngle, org = (point[0] + 30, point[1] - 60), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = mazenta, thickness = 1)
         if k >= 1:
             textDa = '({:5.1f})'.format(da)
-            cv2.putText(blobs, textDa, org = (point[0] + 65, point[1] - 30), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = yellow, thickness = 1)
+            cv2.putText(bbImg, textDa, org = (point[0] + 65, point[1] - 30), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = yellow, thickness = 1)
 
         #回転角の書き込み
         if k > templateIndex:
             try:
                 kaiten = 1000000.0 / dt /(k * 360 / angleTotal)
                 textRps =  '{:6.1f}rps'.format (kaiten)
-                cv2.putText(blobs, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = white, thickness = 1)
+                cv2.putText(bbImg, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = white, thickness = 1)
                 #中心振り分けでの回転数計算
                 dk = k - templateIndex
                 kaiten2 = 1000000.0 / dt /((dk * 2) * 360 /(angle - result[templateIndex - dk][4]))
                 textRps2 =  '{:6.1f}rps'.format (kaiten2)
-                cv2.putText(blobs, textRps2, org = (point[0] + 10, point[1] + 108), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.6, color = yellow, thickness = 1)
+                cv2.putText(bbImg, textRps2, org = (point[0] + 10, point[1] + 108), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.6, color = yellow, thickness = 1)
 
             except ZeroDivisionError:
                 kaiten = 0
-        result.append((k, point[0], point[1], bbData[k][2], angle, da, angleTotal))
+        result.append((k, point[0], point[1], bbData[k][3], angle, da, angleTotal))
 
-        cv2.imshow("blobs", blobs) 
+        cv2.imshow("BB image", bbImg) 
 #################
         cv2.waitKey(1) ##################### 0: WAIT ###############
 ##################
@@ -359,7 +387,7 @@ def process(filename):
         except ZeroDivisionError:
             kaiten = 0    
         print('{:2d}コマ {:6.1f}rps'.format(koma, kaiten))
-    return blobs
+    return bbImg
 
 
 def blobsDetect(image, minGray, maxGray, bbPixelMin, bbPixelMax):
@@ -464,7 +492,7 @@ def estimate_rot(image, template, pt, size):
 
 
     # ぐるぐる回しながら相関が最大となる角度を求める
-    denomi = 1      #角度計算のステップ　1度/denomi
+    denomi = 1      #角度計算のステップ　1度/denomi  2->0.5deg 10->0.1deg
     matchAngle = 0
     for i in range(-180 * denomi, 180 * denomi):
         angle = i / denomi
@@ -474,9 +502,11 @@ def estimate_rot(image, template, pt, size):
         
         if(maxVal > max):
             cr2 = cr.copy()
+            cr2 = cv2.cvtColor(cr2, COLOR_GRAY2BGR)
             matchAngle = angle
             max = maxVal
-            if denomi < 3:
+            if denomi <= 2:
+                #細かく計算する時は表示しない
                 #角度表示
                 cv2.putText(tp, str(matchAngle), org = (0, 15), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
                 # org は左下の座標
@@ -495,7 +525,7 @@ def estimate_rot(image, template, pt, size):
                 #im = ax.imshow(matchResult, cmap="jet")
                 #plt.show()
             
-
+    cv2.waitKey(300)
     print(matchAngle , '° Match value:' ,max)
     return matchAngle
 
