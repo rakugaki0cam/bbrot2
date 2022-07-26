@@ -162,8 +162,6 @@ def process(filename):
     print(bbDataB)
     cv2.waitKey(1)
 
-   #kps = keypoints ###################################修正が必要
-
     ######画像変換の様子だけ見たい時##############
     #return -1 ################
  
@@ -183,7 +181,6 @@ def process(filename):
         bbImg = cirImg
 
 
-
 #途中が抜けた時の処理ーーー未定
 #小さいものの除外 ーーーー未定
 
@@ -195,12 +192,13 @@ def process(filename):
         return bbImg    #円検出だけの画像
 
 
-    #平均サイズ
+    #BB円平均サイズ
     sumSize = 0
     for b in bbData:
         sumSize += b[3]
     bbAve = sumSize / bbcount    
     print('BB size ave ={:6.2f}'.format(bbAve))
+
     index = 0
     for b in bbData:
         #小さすぎるものを除外する
@@ -243,7 +241,7 @@ def process(filename):
     cv2.putText(bbImg, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
 
 
-    #ブロブ検出結果から作業用画像をクロップする  #########################################
+    #BB弾検出結果から作業用画像をクロップする  #########################################
     #x座標
     offsetX = 250
     left = bbData[0][1] - offsetX
@@ -294,15 +292,11 @@ def process(filename):
         bbcenter2.append((b[1] - left, b[2] - top))
 
 
-    #左から数えてtemplate_index目のBB弾を基準とする
-    #カメラ撮影光軸中心付近
-    templateIndex = bbcount // 2   #//の答えは整数となる
-
-    #基準としたBB弾を切り出してテンプレートとする
-    
+    #カメラ撮影光軸中心付近のBB弾を基準とする＝テンプレート
+    templateIndex = bbcount // 2   #//の答えは整数となる    
     tpDia = int(bbData[templateIndex][3] * 0.93)     #周辺の影の部分をマスク
     imgc = crop(scaled, bbcenter2[templateIndex], (tpDia, tpDia))
-    #imgc = crop(median, bbcenter2[templateIndex], (tempD, tempD))###特徴点検出のとき####################################
+    #imgc = crop(median, bbcenter2[templateIndex], (tpDia, tpDia))  ###特徴点検出のとき####################################
     template = mask_circle(imgc, tpDia)
     #2値化オプション??###
     #ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU) 
@@ -322,13 +316,14 @@ def process(filename):
         #回転角度を解析
         angle = estimate_rot(scaled, template, point, bbData[templateIndex][3]) ########scaled
 
-        #回転角がひっくり返っている時の処理　ーーー未定
+#回転角がひっくり返っている時の処理　ーーー未定
 
 
-###################
-        #特徴点検出法
+
+########################################################
+        #特徴点検出法のとき
         #angle2 = contourMatch(median, template2, point, bbData[templateIndex][3])
-####################
+#########################################################
 
 
         #回転角度の線を表示
