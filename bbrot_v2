@@ -115,22 +115,23 @@ def process(filename):
 
     bbCount = len(bbData)
     winShow(bbImg, filename + detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
-
     cv2.waitKey(1)
+
+
 
 #途中が抜けた時の処理ーーー未定
 
-
+###########################################################
+#def bbCorrect(bbData)
     #BB円平均サイズ(半径で計算、表示は直径)
     sumSize = 0
     for b in bbData:
         sumSize += b[3]
     bbAve = sumSize / bbCount    
     print('BBサイズ 平均直径 = {:4.1f}px'.format(bbAve * 2))
-
     bbMin = 0.97 * bbAve
     bbMax = 1.05 * bbAve
-    print('BBサイズ 適正範囲 = {:4.1f}~{:4.1f}px'.format(bbMin * 2, bbMax * 2))
+    print('BBサイズ 適正範囲 = {:4.1f} ~ {:4.1f}px'.format(bbMin * 2, bbMax * 2))
     bbData2 = []
     index = 0
     for b in bbData:
@@ -148,15 +149,16 @@ def process(filename):
     for b in bbData:
         b[0] = index
         index += 1
+#############################################################################        
     bbCount = len(bbData)
-    #print(bbData)
     print('適正BB検出数', bbCount)
-
+    #print(bbData)
+    
     #BB検出数の判定
     if bbCount < 10:
         print('BB検出数が不足   any key to next')
-        cv2.waitKey(0)
         return bbImg    #円検出だけの画像
+
 
 
     #BB進行軸線の傾斜角度
@@ -167,11 +169,9 @@ def process(filename):
     print('傾斜角度: {:6.3f}/{:6.1f} = {:6.3f}deg'.format(dY, dX, incAngle))
 
     
-
-
     #BB弾検出結果から作業用画像を再度正確にクロップする
-    bbImg = cv2.cvtColor(flip.copy(), cv2.COLOR_GRAY2BGR)   #イメージ出力の元画像　再作成
-    #x座標
+    bbImg = cv2.cvtColor(flip.copy(), cv2.COLOR_GRAY2BGR)   #イメージ出力の元画像を再作成
+    #x座標の計算
     offsetX = 250
     left = bbData[0][1] - offsetX
     if left < 0:
@@ -179,7 +179,7 @@ def process(filename):
     right = bbData[bbCount - 1][1] + offsetX
     if right > bbImg.shape[1]:              #(y_size, x_size, color)
         right = bbImg.shape[1]
-    #y座標
+    #y座標の計算
     offsetY = 85
     bby = sorted(bbData, key = lambda x: x[1])    #y座標でソート
     top = bby[0][2] - bbData[0][3] - offsetY
@@ -189,7 +189,7 @@ def process(filename):
     if bottom > bbImg.shape[0]:     
         bottom = bbImg.shape[0]
 
-    #ブロブ検出＆作業書き込み用画像をクロップ
+    #角度表示画像をクロップ
     d = len(bbImg.shape)
     if d <= 2:  #gray or color
         bbImg =  bbImg[top:bottom, left:right]
@@ -209,19 +209,16 @@ def process(filename):
         median = median[top:bottom, left:right, :]
 
     #クロップ後の座標修正
-    #bbcenter2 = []  #クリップ後の座標
     for i in range(bbCount):
-        #bbcenter2.append((b[1] - left, b[2] - top))
         bbData[i][1] -= left
         bbData[i][2] -= top
     print(bbData)
 
     for b in bbData:
-        # 円周を描画する
+        #円周を描画
         cv2.circle(bbImg, (b[1], b[2]), b[3], green, thickness = 1)
-        # 中心点を描画する
+        #中心点を描画
         cv2.drawMarker(bbImg, (b[1], b[2]), darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
-
     cv2.waitKey(1)
 
 
@@ -245,7 +242,6 @@ def process(filename):
     cv2.putText(bbImg, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
 
 
-
     cv2.imshow("BB image", bbImg) 
     cv2.imshow('scaled', scaled)
     cv2.imshow('median', median)
@@ -264,7 +260,6 @@ def process(filename):
 
     tpDia = int(bbDia * 0.93)     #周辺の影の部分をマスク
     imgc = crop(scaled, tpCenter, (tpDia, tpDia))
-    #imgc = crop(median, tpCenter, (tpDia, tpDia))  ###特徴点検出のとき####################################
     template = mask_circle(imgc, tpDia)
     #2値化オプション??###
     #ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU) 
@@ -290,7 +285,7 @@ def process(filename):
 
 ########################################################
         #特徴点検出法のとき
-        #angle2 = contourMatch(median, template2, point, bbData[templateIndex][3])
+        #angle2 = contourMatch(median, template2, point, bbDia)
 #########################################################
 
 
