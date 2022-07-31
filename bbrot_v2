@@ -113,6 +113,11 @@ def process(filename):
         #Hough円検出による
         bbImg, bbData = circlesHough(flipBGR, median, bbPixelMin, bbPixelMax) #　ハフ円検出
 
+    if bbData == None:
+        print('円検出できず')
+        return bbImg    #円検出だけの画像
+
+
     winShow(bbImg, filename + detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
     cv2.waitKey(1)
 
@@ -128,7 +133,7 @@ def process(filename):
     
     #BB検出数の判定
     if bbCount < 10:
-        print('BB検出数が不足   any key to next')
+        input('BB検出数が不足   return key to next')
         return bbImg    #円検出だけの画像
 
     #print('BBデータ [n,x,y,r]: ', bbData)
@@ -159,18 +164,25 @@ def process(filename):
 
 
     #### OCR #####   
-    ocrLcd(image)
+    txt = ocrLcd(image)
+    print('読み取り周期値　{}usec   OKならreturnのみを押す'.format(txt))
+
     #周期の入力
     while(1):
         inpt = input('1コマの周期 usec = ')
         if inpt == '':
-            continue
+            dt = float(txt)
+            if (dt > 120 and dt < 1000):     #12 ~ 100m/sec (@12mm)
+                break
+            else:
+                continue
         dt = float(inpt)
-        if dt > 0:
-         break
+        if (dt > 120 and dt < 1000):     #12 ~ 100m/sec (@12mm)
+            break
 
     #画像へコマ周期、初速、ファイル名を書き込み
-    v0 = 0.012 / (dt / 1000000)     
+    v0 = 0.012 / (dt / 1000000)
+    print('初速　v0 = {:3.2f}m/sec'.format(v0))
     text = "{} circles:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec  incline:{:6.3f}deg  ({})".format(detectMethod, bbCount, dt, v0, incAngle, filename)
     locate = (int(bbData[0][1]), int(bbData[0][2] + 100))
     cv2.putText(bbImg, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
@@ -300,6 +312,11 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
     #　ハフ円検出
     #円検出
     circles = cv2.HoughCircles(median, cv2.HOUGH_GRADIENT, dp = 1.0, minDist = 200, param1 = 100, param2 = 40, minRadius = bbPixelMin // 2-10, maxRadius = bbPixelMax // 2+20)
+    #if circles == None:
+    #    #検出ゼロのとき
+    #    bbData = None
+    #    return image, bbData
+
     #型変換
     circles = np.uint16(np.around(circles))
     circles = np.squeeze(circles)       #[]をひとつ削除する（サイズが1の次元が全て削除される　(1,16,3)->(16,3)　　）
@@ -352,6 +369,11 @@ def circlesBlobs(image, threshold, minGray, maxGray, bbPixelMin, bbPixelMax):
     """
     #ブロブ円検出
     keypoints = blobsDetect(threshold, minGray, maxGray, bbPixelMin, bbPixelMax)
+    if len(keypoints) == 0:
+        #検出ゼロのとき
+        bbData = None
+        return image, bbData
+
     #ブロブを円形で表示
     image = cv2.drawKeypoints(image, keypoints, None, green, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     #x位置順にソート
@@ -454,7 +476,7 @@ def excludeSmall(bbData):
     print('BBサイズ 平均直径 = {:4.1f}px'.format(bbAve * 2))
 
     #判定サイズの計算
-    bbMin = 0.97 * bbAve
+    bbMin = 0.95 * bbAve
     bbMax = 1.05 * bbAve
     print('BBサイズ 適正範囲 = {:4.1f} ~ {:4.1f}px'.format(bbMin * 2, bbMax * 2))
     #選別
@@ -463,7 +485,7 @@ def excludeSmall(bbData):
     for b in bbData:
         #小さすぎるものを除外する
         if (b[3] > bbMax) or (b[3] < bbMin):
-            print('No.', index, 'はサイズ不適合')
+            print('No.{:2.0f}  {:5.1f}px はサイズ不適合'.format(index, b[3] * 2))
         else:
             #合格のデータだけで再構成
             bbData2.append([index, b[1], b[2], b[3]])
@@ -571,7 +593,7 @@ def estimateRot(image, template, pt, size):
     マッチング値
     """
     angle = -1
-    max = 1
+    max = -9999999999
     ext = 10    #周りを少し広く
     cr = crop(image, pt, (size + ext, size + ext ))
     cv2.imshow("match BB", cr)
@@ -743,7 +765,9 @@ def ocrLcd(image):
     #ret, lcdImage = cv2.threshold(lcdImage, 95, 255,cv2.THRESH_BINARY)
 
     # 20200717 P110170~
-    lcdImage = crop(image, ( 2300, 3000) , ( 1000, 1000))  
+    lcdImage = crop(image, ( 1950, 3250) , ( 850, 700))  #中心座標、サイズ
+    #cv2.imshow('t',lcdImage)
+    #cv2.waitKey(0)
     lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
     lcdImage = cv2.medianBlur(lcdImage, ksize = 3) #ksizeは奇数
     ret, lcdImage2 = cv2.threshold(lcdImage, 0, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
@@ -762,7 +786,7 @@ def ocrLcd(image):
     #cv2.waitKey(1) 
 
     #####test 文字
-    cv2.putText(lcdImage, "* test 12.3m/sec (456.7us) test *", org = (20, 860), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = (0,0,0), thickness = 2)
+    #cv2.putText(lcdImage, "* test 12.3m/sec (456.7us) test *", org = (20, 860), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = (0,0,0), thickness = 2)
     cv2.imwrite('ocrimg.png', lcdImage)
 
     cv2.namedWindow("lcdImage", cv2.WINDOW_NORMAL)
@@ -791,17 +815,22 @@ def ocrLcd(image):
     txt = tool.image_to_string(Image.open('ocrimg.png'), lang = 'eng', builder = builder)
     
     out = cv2.imread('ocrimg.png')
-    for r in txt:
-        #print(r.content, end = ' ')
-        #print(r.position)
-        cv2.rectangle(out, r.position[0], r.position[1],(255, 0, 255), 2)
+    for t in txt:
+        #print(t.content, end = ' ')
+        #print(t.position)
+        cv2.rectangle(out, t.position[0], t.position[1],(255, 0, 255), 2)
 
     cv2.imshow('lcdImage', out)
     cv2.waitKey(1)
-    #print(txt)
-    #print()
+    #判別
+    readVal = 0
+    e = len(txt) - 1
+    for i in range(e, e - 2, -1):
+        if txt[i].content == 'us':
+            readVal = txt[i - 1].content
+            break
 
-    return txt
+    return readVal
 
 
 ##### サブ関数　##################################
