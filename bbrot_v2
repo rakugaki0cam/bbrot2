@@ -54,7 +54,7 @@ def process(filename):
     #BB弾の推定サイズ[pixel]の計算
     bbPixelMin = int(image.shape[1] / subjectWidthMax * bbObjectSize)
     bbPixelMax = int(image.shape[1] / subjectWidthMin * bbObjectSize)
-    print('画像サイズ (x:', image.shape[1], 'y:', image.shape[0], ')')
+    print('画像サイズ (x:', image.shape[1], 'y:', image.shape[0], ')', end = ' ')
     print('検出するBB弾の大きさ', bbPixelMin, '~', bbPixelMax, 'pix')
 
     #グレースケール化(OCRで使用)
@@ -121,7 +121,7 @@ def process(filename):
     winShow(bbImg, filename + detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
     cv2.waitKey(1)
 
-    print('BB検出数', len(bbData))
+    print('BB検出数', len(bbData), end = ' ')
 
 
 #途中が抜けた時の処理ーーー未定
@@ -163,26 +163,47 @@ def process(filename):
     cv2.waitKey(1)
 
 
-    #### OCR #####   
-    txt = ocrLcd(image)
-    print('読み取り周期値　{}usec   OKならreturnのみを押す'.format(txt))
+    #### OCR ########################################################
+    txtDt, txtV0 = ocrLcd(image)
 
-    #周期の入力
-    while(1):
-        inpt = input('1コマの周期 usec = ')
-        if inpt == '':
-            dt = float(txt)
-            if (dt > 120 and dt < 1000):     #12 ~ 100m/sec (@12mm)
+    #読み取り値がエラーの時（　.がコンマだったり、数字じゃなかったり）
+    try:
+        dt = float(txtDt)
+    except ValueError:
+        dt = 0
+    print('読み取り周期値テキスト　{}usec '.format(txtDt), end = ' ')
+    try:    
+        txtV0 = float(txtV0)
+    except ValueError:
+        print('*** 読み取り初速値がエラー　{}   周期値がOKの時はreturnキーを押す'.format(txtV0))
+        txtV0 = 99999
+
+    #初速の計算で周期値の読み取りが正しいかを確認
+    v0 = 0.012 / (dt / 1000000)
+    if abs(txtV0 - v0) >= 0.1:
+        #初速の計算値が合わない時
+        if txtV0 != 99999:
+            print('*** 読み取り初速値　{}と計算値{:5.1f}m/sが合わない  周期値がOKの時はreturnキーを押す'.format(txtV0, v0))
+        #周期をキー入力
+        while(1):
+            inpTxt = input('1コマの周期 usec = ')
+            dtMin = 100     #usec  @v0=120m/sec
+            dtMax = 1000    #usec  @v0=12m/sec
+            if inpTxt == '':
+                dt = float(txtDt)
+                if (dt > dtMin and dt < dtMax):     #12 ~ 100m/sec (@12mm)
+                    break
+                else:
+                    continue   
+            dt = float(inpTxt)
+            if (dt > dtMin and dt < dtMax):
                 break
-            else:
-                continue
-        dt = float(inpt)
-        if (dt > 120 and dt < 1000):     #12 ~ 100m/sec (@12mm)
-            break
+    #OK
+    print('dt = {:5.1f}usec'.format(dt), end = " ")
+
 
     #画像へコマ周期、初速、ファイル名を書き込み
-    v0 = 0.012 / (dt / 1000000)
-    print('初速　v0 = {:3.2f}m/sec'.format(v0))
+    print('  初速 v0 = {:3.2f}m/sec'.format(v0))
     text = "{} circles:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec  incline:{:6.3f}deg  ({})".format(detectMethod, bbCount, dt, v0, incAngle, filename)
     locate = (int(bbData[0][1]), int(bbData[0][2] + 100))
     cv2.putText(bbImg, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
@@ -473,12 +494,12 @@ def excludeSmall(bbData):
     for b in bbData:
         sumSize += b[3]
     bbAve = sumSize / bbCount    
-    print('BBサイズ 平均直径 = {:4.1f}px'.format(bbAve * 2))
+    print('BBサイズ 平均直径 = {:4.1f}px'.format(bbAve * 2), end = ' ')
 
     #判定サイズの計算
     bbMin = 0.95 * bbAve
     bbMax = 1.05 * bbAve
-    print('BBサイズ 適正範囲 = {:4.1f} ~ {:4.1f}px'.format(bbMin * 2, bbMax * 2))
+    print('適正範囲 = {:4.1f} ~ {:4.1f}px'.format(bbMin * 2, bbMax * 2))
     #選別
     bbData2 = []
     index = 0
@@ -756,7 +777,8 @@ def ocrLcd(image):
  
     Returns
     -------
-        読み取った文字列
+        読み取った周期時間
+        読み取った初速
     """
 
     #lcdImage = crop(image, ( 1800, 800) , ( 1000, 1000)) 
@@ -827,10 +849,14 @@ def ocrLcd(image):
     e = len(txt) - 1
     for i in range(e, e - 2, -1):
         if txt[i].content == 'us':
-            readVal = txt[i - 1].content
+            rvI = i - 1
+            readVal = txt[rvI].content
             break
+    
+    readV0 = txt[rvI - 2].content
+    #print(readV0)
 
-    return readVal
+    return readVal, readV0
 
 
 ##### サブ関数　##################################
@@ -978,9 +1004,9 @@ for f in filesSorted:
     res = process(openFileName)
     savedFileName = "result" + f
     cv2.imwrite(savedFileName, res)
+    input('何かキーを押す　-> 次の画像へ')
 
 print('Complete')
-print('any key -> exit system')
-cv2.waitKey(0)
+input('any key -> exit system')
 
 
