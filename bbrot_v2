@@ -171,7 +171,7 @@ def process(filename):
         dt = float(txtDt)
     except ValueError:
         dt = 0
-    print('読み取り周期値テキスト　{}usec '.format(txtDt), end = ' ')
+    print('読み取り周期値テキスト {}  '.format(txtDt), end = ' ')
     try:    
         txtV0 = float(txtV0)
     except ValueError:
@@ -197,9 +197,10 @@ def process(filename):
                     continue   
             dt = float(inpTxt)
             if (dt > dtMin and dt < dtMax):
+                v0 = 0.012 / (dt / 1000000)         #初速の計算を入力値でやり直し
                 break
     #OK
-    print('dt = {:5.1f}usec'.format(dt), end = " ")
+    print(' dt = {:5.1f}usec'.format(dt), end = " ")
 
 
     #画像へコマ周期、初速、ファイル名を書き込み
@@ -221,7 +222,8 @@ def process(filename):
     tpCenter = (bbData[templateIndex][1], bbData[templateIndex][2])     #BB中心
     bbDia = bbData[templateIndex][3] * 2                                #BB直径
 
-    tpDia = int(bbDia * 0.93)     #周辺の影の部分をマスク
+    kShadow = 0.95 #0.93
+    tpDia = int(bbDia * kShadow)     #周辺の影の部分をマスク
     imgc = crop(scaled, tpCenter, (tpDia, tpDia))
     template = mask_circle(imgc, tpDia)
     #2値化オプション??###
@@ -532,8 +534,8 @@ def  inclinationAngle(bbData):
     """
 
     num = len(bbData)
-    dY = bbData[num - 1][2] - bbData[0][2]
-    dX = bbData[num - 1][1] - bbData[0][1]
+    dY = float(bbData[num - 1][2]) - float(bbData[0][2])
+    dX = float(bbData[num - 1][1]) - float(bbData[0][1])
     incAngle = -math.degrees(math.atan(dY / dX))
     return dX, dY, incAngle
 
@@ -785,9 +787,11 @@ def ocrLcd(image):
     #lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
     #lcdImage = cv2.medianBlur(lcdImage, ksize = 1) #ksizeは奇数
     #ret, lcdImage = cv2.threshold(lcdImage, 95, 255,cv2.THRESH_BINARY)
-
     # 20200717 P110170~
-    lcdImage = crop(image, ( 1950, 3250) , ( 850, 700))  #中心座標、サイズ
+    #lcdImage = crop(image, ( 1950, 3250) , ( 850, 700))  #中心座標、サイズ
+
+    # 20200717 P110416~
+    lcdImage = crop(image, ( 2400, 3250) , ( 700, 750))  #中心座標、サイズ
     #cv2.imshow('t',lcdImage)
     #cv2.waitKey(0)
     lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
@@ -1004,7 +1008,7 @@ for f in filesSorted:
     res = process(openFileName)
     savedFileName = "result" + f
     cv2.imwrite(savedFileName, res)
-    input('何かキーを押す　-> 次の画像へ')
+    input('Returnキーを押す -> 次の画像へ')
 
 print('Complete')
 input('any key -> exit system')
