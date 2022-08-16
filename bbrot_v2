@@ -222,7 +222,7 @@ def process(filename):
     tpCenter = (bbData[templateIndex][1], bbData[templateIndex][2])     #BB中心
     bbDia = bbData[templateIndex][3] * 2                                #BB直径
 
-    kShadow = 0.95 #0.93
+    kShadow = 0.94 #0.93 # 2020/08/16 P110416~
     tpDia = int(bbDia * kShadow)     #周辺の影の部分をマスク
     imgc = crop(scaled, tpCenter, (tpDia, tpDia))
     template = mask_circle(imgc, tpDia)
@@ -787,10 +787,10 @@ def ocrLcd(image):
     #lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
     #lcdImage = cv2.medianBlur(lcdImage, ksize = 1) #ksizeは奇数
     #ret, lcdImage = cv2.threshold(lcdImage, 95, 255,cv2.THRESH_BINARY)
-    # 20200717 P110170~
+    # 2020/07/17  P110170~
     #lcdImage = crop(image, ( 1950, 3250) , ( 850, 700))  #中心座標、サイズ
 
-    # 20200717 P110416~
+    # 2020/08/16 P110416~
     lcdImage = crop(image, ( 2400, 3250) , ( 700, 750))  #中心座標、サイズ
     #cv2.imshow('t',lcdImage)
     #cv2.waitKey(0)
