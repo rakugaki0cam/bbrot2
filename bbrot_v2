@@ -619,6 +619,10 @@ def estimateRot(image, template, pt, size):
     max = -9999999999
     ext = 10    #周りを少し広く
     cr = crop(image, pt, (size + ext, size + ext ))
+    #周囲を白く
+    k = 0.94    #縁が出ないように ##################2022.08.19
+    cr = mask_circle(cr, int(size * k)) 
+
     cv2.imshow("match BB", cr)
     (w, h) = template.shape[: : -1] 
 
