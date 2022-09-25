@@ -229,9 +229,9 @@ def process(filename):
     #2値化オプション??###
     #ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU) 
 
-#########特徴点検出用テンプレート（周辺画像までいれて広くしないと特徴点が検出されない）
-    template2 = crop(median, tpCenter,(tpDia * 3, tpDia * 3))
-#####################特徴点検出法
+    #########特徴点検出用テンプレート（周辺画像までいれて広くしないと特徴点が検出されない）
+    #template2 = crop(median, tpCenter,(tpDia * 3, tpDia * 3))
+    #####################特徴点検出法
 
 
     #検出したBB弾すべてに角度推定を実行する
@@ -280,7 +280,7 @@ def process(filename):
         #回転角の書き込み
         if i > templateIndex:
             try:
-                kaiten = 1000000.0 / dt /(i * 360 / angleTotal)
+                kaiten = 1000000.0 / dt / (i * 360 / angleTotal)
                 textRps =  '{:6.1f}rps'.format (kaiten)
                 cv2.putText(bbImg, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = white, thickness = 1)
                 #中心振り分けでの回転数計算
@@ -293,7 +293,8 @@ def process(filename):
                 kaiten = 0
         result.append((i, point[0], point[1], bbData[i][3], matchAngle, da, angleTotal))
         cv2.imshow("BB image", bbImg) 
-
+        cv2.waitKey(1)
+        
     #################
     cv2.waitKey(200) ##################### 0: WAIT ############### 300: moment
     ##################
@@ -646,7 +647,7 @@ def estimateRot(image, template, pt, size):
 
 
     # ぐるぐる回しながら相関が最大となる角度を求める
-    denomi = 1      #角度計算のステップ　1度/denomi  2->0.5deg 10->0.1deg
+    denomi = 10      #角度計算のステップ　1度/denomi  2->0.5deg 10->0.1deg
     matchAngle = 0
     for i in range(-180 * denomi, 180 * denomi):
         angle = i / denomi
