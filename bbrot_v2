@@ -238,6 +238,8 @@ def process(filename):
     print('計算開始')
 
     result = []
+    xt = []
+    yt = []
     anglefirst = 999
     for i in range(bbCount):
         point = (bbData[i][1], bbData[i][2])    #BB中心
@@ -276,40 +278,79 @@ def process(filename):
         if i >= 1:
             textDa = '({:5.1f})'.format(da)
             cv2.putText(bbImg, textDa, org = (point[0] + 65, point[1] - 30), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = yellow, thickness = 1)
-
+        
+        
         #回転角の書き込み
+        try:
+            kaiten = 1000000.0 / dt / (i * 360 / angleTotal)
+        except ZeroDivisionError:
+            kaiten = 0
         if i > templateIndex:
-            try:
-                kaiten = 1000000.0 / dt / (i * 360 / angleTotal)
                 textRps =  '{:6.1f}rps'.format (kaiten)
                 cv2.putText(bbImg, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = white, thickness = 1)
                 #中心振り分けでの回転数計算
                 dk = i - templateIndex
-                kaiten2 = 1000000.0 / dt /((dk * 2) * 360 /(matchAngle - result[templateIndex - dk][4]))
+                kaiten2 = 1000000.0 / dt /((dk * 2) * 360 /(matchAngle - result[templateIndex - dk][5]))
                 textRps2 =  '{:6.1f}rps'.format (kaiten2)
                 cv2.putText(bbImg, textRps2, org = (point[0] + 10, point[1] + 108), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.6, color = yellow, thickness = 1)
 
-            except ZeroDivisionError:
-                kaiten = 0
-        result.append((i, point[0], point[1], bbData[i][3], matchAngle, da, angleTotal))
+        result.append((i, i * dt, point[0], point[1], bbData[i][3], matchAngle, da, angleTotal, kaiten))
+        xt.append(i * dt)
+        yt.append(matchAngle)
+        r = result[-1]
+        print('{:2.0f}   t:{:7.1f} x:{:5.0f} y:{:5.0f} r:{:3.0f}   {:6.1f}deg ({:6.1f})  total {:6.1f}deg   {:6.1f}rps'.format(r[0] + 1, r[1], r[2], r[3], r[4], r[5], r[6], r[7], kaiten))        
+        
         cv2.imshow("BB image", bbImg) 
         cv2.waitKey(1)
-        
-    #################
-    cv2.waitKey(200) ##################### 0: WAIT ############### 300: moment
-    ##################
+    
+    # 回帰計算により回転数を求める
+    px = result[templateIndex][2] - 60      #文字の表示位置
+    py = result[templateIndex][3] + 100
+    # 異常値の検出　da
+    aveDa = result[-1][7] / (bbCount - 1)
+    print('角度変化分の平均値 {:6.1f}°'.format(aveDa))
 
-    # 結果の表示など
-    for r in result: #i, d in enumerate(result):
-        #print(*d, sep = ',')
-        koma = r[0]
-        try:
-            kaiten = 1000000.0 / dt /(r[0] * 360 / r[6])
-        except ZeroDivisionError:
-            kaiten = 0    
-        print('{:2.0f} x:{:5.0f} y:{:5.0f} r:{:3.0f}  {:5.1f}deg ({:4.1f})  total {:5.1f}deg {:6.1f}rps'.format(r[0], r[1], r[2], r[3], r[4], r[5], r[6], kaiten))
+    di = 0
+    for i, r in enumerate(result):
+        if i == 0:
+            continue
+        if r[6] > aveDa * 1.2 or r[6] < aveDa * 0.8:  
+            print('{:2d}コマ目 - {:6.1f}° は異常値のため除外'.format(i + 1, r[6]))
+            del xt[i - di]
+            del yt[i - di]
+            di += 1     #デリートすると1つ詰まって、添字の位置が変わる
+            if di > 3:  #4つ目で中止
+                print("＊＊＊＊＊ 読み取り不可 ＊＊＊＊＊")
+                cv2.putText(bbImg, 'XXXXXX', org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2) 
+                cv2.imshow("BB image", bbImg) 
+                cv2.waitKey(1) 
+                return bbImg
+
+    # 回帰計算
+    a,b = np.polyfit(xt, yt, 1)     # y=ax+b  
+
+    print('直線回帰式　y = {:7.4f}x {:+8.2f}   y:角度  x:時刻 '.format(a, b))
+    x0 = result[0][0]
+    x1 = result[bbCount - 1][0]
+    y0 = a * x0 + b
+    y1 = a * x1 + b
+    rotTre = (y1 - y0) / 360 / ((x1 - x0)/ 1000000)
+    print('ホップ回転数{:6.1f}rps (回帰計算による)'.format(rotTre))
+    textRps2 =  '{:6.1f}rps'.format (rotTre)
+    
+    cv2.putText(bbImg, textRps2, org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2) 
+    cv2.imshow("BB image", bbImg) 
+
+
+
     
     print ('計算完了')
+    
+    #################
+    cv2.waitKey(200) ##################### 0: WAIT ############### 200: moment
+    ##################
+
+
 
     return bbImg
 
