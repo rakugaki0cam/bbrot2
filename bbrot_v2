@@ -306,6 +306,14 @@ def process(filename):
     # 回帰計算により回転数を求める
     px = result[templateIndex][2] - 60      #文字の表示位置
     py = result[templateIndex][3] + 100
+
+
+    #回帰直線から2デルタ以上離れているものを除外して、もう一度回帰計算する#######################未
+
+
+
+    
+
     # 異常値の検出　da
     aveDa = result[-1][7] / (bbCount - 1)
     print('角度変化分の平均値 {:6.1f}°'.format(aveDa))
@@ -319,7 +327,7 @@ def process(filename):
             del xt[i - di]
             del yt[i - di]
             di += 1     #デリートすると1つ詰まって、添字の位置が変わる
-            if di > 3:  #4つ目で中止
+            if di > 8:  #9つ目で中止
                 print("＊＊＊＊＊ 読み取り不可 ＊＊＊＊＊")
                 cv2.putText(bbImg, 'XXXXXX', org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2) 
                 cv2.imshow("BB image", bbImg) 
