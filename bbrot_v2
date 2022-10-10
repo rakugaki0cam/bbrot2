@@ -67,7 +67,7 @@ def process(filename):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     #高さを中央付近450pxにクロップ
     w = image.shape[1]
-    h = 650     #切り取り画像の縦ピクセル数###############################   450  ###########################################
+    h = 650     #切り取り画像の縦ピクセル数 ### 2022/10/10 撮影高さ失敗につき　450から変更
     top = (image.shape[0] - h) // 2
     flip = image[top: top + h, 0: w]
     #右から撃っているので、左から右への時系列になるように左右反転
@@ -317,7 +317,7 @@ def process(filename):
     py = result[templateIndex][3] + 100
 
 
-    #回帰直線から2デルタ以上離れているものを除外して、もう一度回帰計算する#######################未
+####### 回帰直線から2デルタ以上離れているものを除外して、もう一度回帰計算する #######################　未
 
 
 
@@ -337,7 +337,7 @@ def process(filename):
             del yt[i - di]
             di += 1     #デリートすると1つ詰まって、添字の位置が変わる
             if di > 8:  #9つ目で中止
-                print("＊＊＊＊＊ 読み取り不可 ＊＊＊＊＊")
+                print("***** 読み取り不可 *****")
                 cv2.putText(bbImg, 'XXXXXX', org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2) 
                 cv2.imshow("BB image", bbImg) 
                 cv2.waitKey(1) 
