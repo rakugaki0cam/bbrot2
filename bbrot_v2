@@ -61,7 +61,7 @@ def process(filename):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     #高さを中央付近450pxにクロップ
     w = image.shape[1]
-    h = 450     #切り取り画像の縦ピクセル数
+    h = 650     #切り取り画像の縦ピクセル数###############################   450  ###########################################
     top = (image.shape[0] - h) // 2
     flip = image[top: top + h, 0: w]
     #右から撃っているので、左から右への時系列になるように左右反転
@@ -166,11 +166,11 @@ def process(filename):
     #### OCR ########################################################
     txtDt, txtV0 = ocrLcd(image)
 
-    #読み取り値がエラーの時（　.がコンマだったり、数字じゃなかったり）
+    #Δ時間の読み取り値が数値変換時にエラーの時（　.がコンマだったり、数字じゃなかったり）
     try:
         dt = float(txtDt)
     except ValueError:
-        dt = 0
+        dt = 1000000    #ゼロだとエラーでとまるため大きい数値に
     print('読み取り周期値テキスト {}  '.format(txtDt), end = ' ')
     try:    
         txtV0 = float(txtV0)
@@ -204,7 +204,7 @@ def process(filename):
 
 
     #画像へコマ周期、初速、ファイル名を書き込み
-    print('  初速 v0 = {:3.2f}m/sec'.format(v0))
+    print('  初速 v0 = {:3.1f}m/sec'.format(v0))
     text = "{} circles:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec  incline:{:6.3f}deg  ({})".format(detectMethod, bbCount, dt, v0, incAngle, filename)
     locate = (int(bbData[0][1]), int(bbData[0][2] + 100))
     cv2.putText(bbImg, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
@@ -290,7 +290,10 @@ def process(filename):
                 cv2.putText(bbImg, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = white, thickness = 1)
                 #中心振り分けでの回転数計算
                 dk = i - templateIndex
-                kaiten2 = 1000000.0 / dt /((dk * 2) * 360 /(matchAngle - result[templateIndex - dk][5]))
+                try:
+                    kaiten2 = 1000000.0 / dt /((dk * 2) * 360 /(matchAngle - result[templateIndex - dk][5]))
+                except ZeroDivisionError:
+                    kaiten2 = 0
                 textRps2 =  '{:6.1f}rps'.format (kaiten2)
                 cv2.putText(bbImg, textRps2, org = (point[0] + 10, point[1] + 108), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.6, color = yellow, thickness = 1)
 
@@ -841,24 +844,24 @@ def ocrLcd(image):
     #lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
     #lcdImage = cv2.medianBlur(lcdImage, ksize = 1) #ksizeは奇数
     #ret, lcdImage = cv2.threshold(lcdImage, 95, 255,cv2.THRESH_BINARY)
-    # 2020/07/17  P110170~
+    # 2022/07/17  P110170~
     #lcdImage = crop(image, ( 1950, 3250) , ( 850, 700))  #中心座標、サイズ
 
-    # 2020/08/16 P110416~
+    # 2022/08/16 P110416~
     lcdImage = crop(image, ( 2400, 3250) , ( 700, 750))  #中心座標、サイズ
     #cv2.imshow('t',lcdImage)
     #cv2.waitKey(0)
     lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
     lcdImage = cv2.medianBlur(lcdImage, ksize = 3) #ksizeは奇数
     ret, lcdImage2 = cv2.threshold(lcdImage, 0, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-    print('OCR用二値化　大津の閾値:', ret)
+    print('OCR用二値化 大津の閾値:', ret)
     ret,lcdImage = cv2.threshold(lcdImage, ret + 35, 255,cv2.THRESH_BINARY)
     #retはOTSUのときのしきい値
     kernel = np.ones((3,3),np.uint8)
     lcdImage = cv2.erode(lcdImage, kernel, 4)
 
     #lcdImage = rot(lcdImage, 91.5)
-    lcdImage = rot(lcdImage, -90)
+    #lcdImage = rot(lcdImage, -90)####2022/8/16~10/10###OLEDに変更で回転無し
     #cv2.imshow("image4", lcdImage)
     #cv2.waitKey(1) 
     lcdImage = cv2.bitwise_not(lcdImage)    #反転
@@ -896,23 +899,36 @@ def ocrLcd(image):
     
     out = cv2.imread('ocrimg.png')
     for t in txt:
-        #print(t.content, end = ' ')
-        #print(t.position)
+        #print("[", t.content, end = ' ')###debug
+        #print(t.position, "]")###debug
         cv2.rectangle(out, t.position[0], t.position[1],(255, 0, 255), 2)
 
     cv2.imshow('lcdImage', out)
     cv2.waitKey(1)
     #判別
-    readVal = 0
-    e = len(txt) - 1
-    for i in range(e, e - 2, -1):
+    if len(txt) < 4:
+        #読み取り項目不足のとき
+        readVal = "xxx.x"
+        readV0 = "xx.x"
+        return readVal, readV0
+
+    rvI = 0
+    readVal = ""
+    #e = len(txt) - 1
+    for i in range(-1, -3, -1):#range(e, e - 2, -1):
         if txt[i].content == 'us':
             rvI = i - 1
             readVal = txt[rvI].content
+            #print("dt読み取り値 ", readVal)###debug
             break
-    
-    readV0 = txt[rvI - 2].content
-    #print(readV0)
+
+    #usが識別できなかった時
+    if rvI < 2:
+        readVal = txt[-2].content 
+        readV0 = txt[-4].content
+    else:
+        readV0 = txt[rvI - 2].content
+    #print("v0読み取り値 ", readV0)###debug
 
     return readVal, readV0
 
