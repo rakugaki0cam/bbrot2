@@ -177,11 +177,11 @@ def process(filename):
         dt = float(txtDt)
     except ValueError:
         dt = 1000000    #ゼロだとエラーでとまるため大きい数値に
-    print('読み取り周期値テキスト {}  '.format(txtDt), end = ' ')
+    print('読み取り周期値テキスト "{}"  '.format(txtDt), end = ' ')
     try:    
         txtV0 = float(txtV0)
     except ValueError:
-        print('*** 読み取り初速値がエラー　{}   周期値がOKの時はreturnキーを押す'.format(txtV0))
+        print('*** 読み取り初速値がエラー　"{}"   周期値がOKの時はreturnキーを押す'.format(txtV0))
         txtV0 = 99999
 
     #初速の計算で周期値の読み取りが正しいかを確認
@@ -189,7 +189,7 @@ def process(filename):
     if abs(txtV0 - v0) >= 0.1:
         #初速の計算値が合わない時
         if txtV0 != 99999:
-            print('*** 読み取り初速値　{}と計算値{:5.1f}m/sが合わない  周期値がOKの時はreturnキーを押す'.format(txtV0, v0))
+            print('*** 読み取り初速値　"{}"と計算値{:5.1f}m/sが合わない  周期値がOKの時はreturnキーを押す'.format(txtV0, v0))
         #周期をキー入力
         while(1):
             inpTxt = input('1コマの周期 usec = ')
@@ -846,28 +846,50 @@ def ocrLcd(image):
         読み取った初速
     """
 
-    #lcdImage = crop(image, ( 1800, 800) , ( 1000, 1000)) 
-    #lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
-    #lcdImage = cv2.medianBlur(lcdImage, ksize = 1) #ksizeは奇数
-    #ret, lcdImage = cv2.threshold(lcdImage, 95, 255,cv2.THRESH_BINARY)
-    # 2022/07/17  P110170~
-    #lcdImage = crop(image, ( 1950, 3250) , ( 850, 700))  #中心座標、サイズ
+    #撮影時の表示の位置で設定を変更
+    #if fileName < "P110169":
 
-    # 2022/08/16 P110416~
-    lcdImage = crop(image, ( 2400, 3250) , ( 700, 750))  #中心座標、サイズ
-    #cv2.imshow('t',lcdImage)
-    #cv2.waitKey(0)
-    lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
-    lcdImage = cv2.medianBlur(lcdImage, ksize = 3) #ksizeは奇数
-    ret, lcdImage2 = cv2.threshold(lcdImage, 0, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-    print('OCR用二値化 大津の閾値:', ret)
-    ret,lcdImage = cv2.threshold(lcdImage, ret + 35, 255,cv2.THRESH_BINARY)
-    #retはOTSUのときのしきい値
-    kernel = np.ones((3,3),np.uint8)
-    lcdImage = cv2.erode(lcdImage, kernel, 4)
+    ocrType = 1.2   # 0 --  2022/07/17~ 手入力  P1110155.JPG ~ P1110xxx.JPG
+                    # 1 --  2022/07/17~ 手入力  P1110170.JPG ~ P1110236.JPG 　　確認　0170-179,0183-0191
+                    # 1.2 - 2022/07/24~ 手入力  P1110241.JPG ~ P1110xxx.JPG 　　確認　0241-0256,0258-273
+                    # 2 --  2022/08/16~  P1110414.JPG ~ P1110603.JPG
+                    # 3 --  2022/10/10~  P1110609.JPG ~ 
 
-    #lcdImage = rot(lcdImage, 91.5)
-    #lcdImage = rot(lcdImage, -90)####2022/8/16~10/10###OLEDに変更で回転無し
+    if ocrType == 0:
+        lcdImage = crop(image, ( 1800, 800) , ( 1000, 1000)) 
+        lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
+        lcdImage = cv2.medianBlur(lcdImage, ksize = 1) #ksizeは奇数
+        ret, lcdImage = cv2.threshold(lcdImage, 95, 255,cv2.THRESH_BINARY)
+    else:
+        if ocrType == 1:
+            # 2022/07/17~  P1110170.JPG ~ P1110xxx.JPG
+            lcdImage = crop(image, ( 2250, 3250) , ( 850, 700))  #中心座標、サイズ
+        if ocrType == 1.2:
+            # 2020/07/24~  P1110241.JPG~
+            lcdImage = crop(image, ( 1950, 3250) , ( 850, 800))  #中心座標、サイズ
+        if ocrType == 2:
+            # 2022/08/16 P1110416.JPG~
+            lcdImage = crop(image, ( 2400, 3250) , ( 700, 750))  #中心座標、サイズ
+
+        #cv2.imshow('t',lcdImage)
+        #cv2.waitKey(0)
+        lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
+        lcdImage = cv2.medianBlur(lcdImage, ksize = 3) #ksizeは奇数
+        ret, lcdImage2 = cv2.threshold(lcdImage, 0, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+        print('OCR用二値化 大津の閾値:', ret)
+        ret, lcdImage = cv2.threshold(lcdImage, ret + 35, 255,cv2.THRESH_BINARY)
+        #retはOTSUのときのしきい値
+        kernel = np.ones((3,3),np.uint8)
+        lcdImage = cv2.erode(lcdImage, kernel, 4)
+
+    #表示LCD(deBUGger)の回転
+    if ocrType == 0:
+        lcdImage = rot(lcdImage, 91.5)
+    if ocrType >= 1 or ocrType <= 2:
+        lcdImage = rot(lcdImage, -90)
+    #2020/10/10~ 専用OLED LCDに変更したので回転不要
+
+
     #cv2.imshow("image4", lcdImage)
     #cv2.waitKey(1) 
     lcdImage = cv2.bitwise_not(lcdImage)    #反転
