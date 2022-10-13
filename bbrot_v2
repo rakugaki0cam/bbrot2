@@ -121,6 +121,8 @@ def process(filename):
 
     if bbData == None:
         print('円検出できず')
+        winShow(bbImg, filename + detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
+        cv2.waitKey(1)
         return bbImg    #円検出だけの画像
 
 
@@ -394,10 +396,10 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
     #　ハフ円検出
     #円検出
     circles = cv2.HoughCircles(median, cv2.HOUGH_GRADIENT, dp = 1.0, minDist = 200, param1 = 100, param2 = 40, minRadius = bbPixelMin // 2-10, maxRadius = bbPixelMax // 2+20)
-    #if circles == None:
-    #    #検出ゼロのとき
-    #    bbData = None
-    #    return image, bbData
+    if circles == None:
+        #検出ゼロのとき
+        bbData = None
+        return image, bbData
 
     #型変換
     circles = np.uint16(np.around(circles))
@@ -849,7 +851,7 @@ def ocrLcd(image):
     #撮影時の表示の位置で設定を変更
     #if fileName < "P110169":
 
-    ocrType = 1.2   # 0 --  2022/07/17~ 手入力  P1110155.JPG ~ P1110xxx.JPG
+    ocrType = 3     # 0 --  2022/07/17~ 手入力  P1110155.JPG ~ P1110xxx.JPG
                     # 1 --  2022/07/17~ 手入力  P1110170.JPG ~ P1110236.JPG 　　確認　0170-179,0183-0191
                     # 1.2 - 2022/07/24~ 手入力  P1110241.JPG ~ P1110xxx.JPG 　　確認　0241-0256,0258-273
                     # 2 --  2022/08/16~  P1110414.JPG ~ P1110603.JPG
@@ -867,7 +869,7 @@ def ocrLcd(image):
         if ocrType == 1.2:
             # 2020/07/24~  P1110241.JPG~
             lcdImage = crop(image, ( 1950, 3250) , ( 850, 800))  #中心座標、サイズ
-        if ocrType == 2:
+        if ocrType == 2 or ocrType == 3:
             # 2022/08/16 P1110416.JPG~
             lcdImage = crop(image, ( 2400, 3250) , ( 700, 750))  #中心座標、サイズ
 
@@ -885,7 +887,7 @@ def ocrLcd(image):
     #表示LCD(deBUGger)の回転
     if ocrType == 0:
         lcdImage = rot(lcdImage, 91.5)
-    if ocrType >= 1 or ocrType <= 2:
+    if ocrType >= 1 and ocrType <= 2:
         lcdImage = rot(lcdImage, -90)
     #2020/10/10~ 専用OLED LCDに変更したので回転不要
 
