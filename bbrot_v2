@@ -396,7 +396,7 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
     #　ハフ円検出
     #円検出
     circles = cv2.HoughCircles(median, cv2.HOUGH_GRADIENT, dp = 1.0, minDist = 200, param1 = 100, param2 = 40, minRadius = bbPixelMin // 2-10, maxRadius = bbPixelMax // 2+20)
-    if circles == None:
+    if circles is None:
         #検出ゼロのとき
         bbData = None
         return image, bbData
