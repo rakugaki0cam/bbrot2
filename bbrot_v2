@@ -4,7 +4,9 @@
 #       2022.07.09
 #
 #   変更履歴
-#   2022.10.10 OCR仕様変更ー表示器をdeBUGgerからOLEDに変更のため
+#   2022.10.10  OCR仕様変更ー表示器をdeBUGgerからOLEDに変更のため。
+#   2022.10.28  回転方向を限定することで-359〜359度の回転解析角度とした。
+#               解析の時の角度を前回値から推定することで解析角度を狭めて高速化。
 #
 #
 
@@ -248,13 +250,31 @@ def process(filename):
     result = []
     xt = []
     yt = []
+    #回転方向を限定して、解析回転角度を制限
+    startAngle = -358           #スタート角
+    matchAngle = startAngle
+    endAngle = 0
     anglefirst = 999
+    ##右端の回転角を先に解析 --> 真ん中から右側の角度解析の終角
+    point = (bbData[bbCount-1][1], bbData[bbCount-1][2])    #右端のBB中心
+    lastAngle, matchVal = estimateRot(scaled, template, 0, 359, point, bbDia)  ########scaled
+
     for i in range(bbCount):
         point = (bbData[i][1], bbData[i][2])    #BB中心
-        #回転角度を解析
-        matchAngle, matchVal = estimateRot(scaled, template, point, bbDia)  ########scaled
-        #print("{:5.1f}deg  Match value:{:10.0f}".format(matchAngle, matchVal))
 
+        #回転角度を制限
+        startAngle = int(matchAngle) - 1          #スタート角
+        if i < templateIndex:
+            endAngle = 0
+        elif i == templateIndex:
+            endAngle = 1
+        else:
+            endAngle = int(lastAngle) + 1
+        #print("start {:4d}deg  end {:4d}deg".format(startAngle, endAngle))     #解析角度範囲
+
+        #回転角度を解析
+        matchAngle, matchVal = estimateRot(scaled, template, startAngle, endAngle, point, bbDia)  ########scaled
+        #print("{:5.1f}deg  Match value:{:10.0f}".format(matchAngle, matchVal))
 
 #########回転角がひっくり返っている時の処理　ーーー未定
 
@@ -273,7 +293,7 @@ def process(filename):
         cv2.line(bbImg, pt1, pt2, mazenta, thickness = 1)
         
         if anglefirst == 999:
-            anglefirst = matchAngle
+            anglefirst = matchAngle     #最初のコマの角度
             angleBefore = matchAngle
 
         #角度の書き込み
@@ -656,7 +676,7 @@ def bbImageCrop(image, bbData):
 
 ##### テンプレート or 特徴点 マッチング ############################################
 
-def estimateRot(image, template, pt, size):
+def estimateRot(image, template, startAngle, endAngle, pt, size):
     """
     回転角の推定
 
@@ -666,6 +686,10 @@ def estimateRot(image, template, pt, size):
         推定対象の画像
     template : mat
         テンプレート画像
+    startAngle :
+        解析開始角度
+    endAngle :
+        解析終了角度
     pt : [number, number]
         推定対象の中心位置[col,row]
     size : any
@@ -673,7 +697,7 @@ def estimateRot(image, template, pt, size):
 
     Returns
     -------
-    回転角 -180~+180(deg)
+    回転角 -360~+360(deg)
     マッチング値
     """
     angle = -1
@@ -709,7 +733,7 @@ def estimateRot(image, template, pt, size):
     # ぐるぐる回しながら相関が最大となる角度を求める
     denomi = 10      #角度計算のステップ　1度/denomi  2->0.5deg 10->0.1deg
     matchAngle = 0
-    for i in range(-180 * denomi, 180 * denomi):
+    for i in range(startAngle * denomi, endAngle * denomi):
         angle = i / denomi
         tp = rot(template, angle)
         matchResult = cv2.matchTemplate(cr, tp, cv2.TM_CCOEFF)
