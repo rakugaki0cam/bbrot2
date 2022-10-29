@@ -1159,11 +1159,7 @@ for f in filesSorted:
         writer.writerow([f, incAngle, v0, dt, bbRot, statusE])
 
 
-
-
-
     input('Returnキーを押す -> 次の画像へ')
-
 
 print('Complete')
 input('any key -> exit system')
