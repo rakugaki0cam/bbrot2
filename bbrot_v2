@@ -1125,7 +1125,7 @@ def winShow(image, name, pt, size):
 #プログラムは先頭から実行されていくがdef関数定義の中身は実行されないので、実際に呼び出された時で考える。
 #ここでprocess()が呼ばれるまでにprocess()中で呼ばれる関数は定義されているのでprocess()の後に定義でもオッケー
 
-root = './bbpict/go'
+root = './bbpict'
 files = os.listdir(path = root)
 filesSorted = sorted(files)
 filesSorted.remove('.DS_Store')
