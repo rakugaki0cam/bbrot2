@@ -24,6 +24,8 @@ import sys
 sys.path.append('/path/to/dir')
 import pyocr
 import pyocr.builders
+import csv
+import datetime
 
 #ウインドウの設定
 cv2.namedWindow('template3', cv2.WINDOW_NORMAL)
@@ -215,7 +217,7 @@ def process(filename):
 
     #画像へコマ周期、初速、ファイル名を書き込み
     print('  初速 v0 = {:3.1f}m/sec'.format(v0))
-    text = "{} circles:{:2d}  dt:{:5.1f}usec  v0:{:5.1f}m/sec  incline:{:6.3f}deg  ({})".format(detectMethod, bbCount, dt, v0, incAngle, filename)
+    text = "{} circles:{:2d}  v0:{:5.1f}m/sec  dt:{:5.1f}usec  incline:{:6.3f}deg  ({})".format(detectMethod, bbCount, v0, dt, incAngle, filename)
     locate = (int(bbData[0][1]), int(bbData[0][2] + 100))
     cv2.putText(bbImg, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
 
@@ -260,16 +262,16 @@ def process(filename):
     lastAngle, matchVal = estimateRot(scaled, template, 0, 359, point, bbDia)  ########scaled
 
     for i in range(bbCount):
-        point = (bbData[i][1], bbData[i][2])    #BB中心
+        point = (bbData[i][1], bbData[i][2])        #BB中心
 
         #回転角度を制限
-        startAngle = int(matchAngle) - 1          #スタート角
+        startAngle = int(matchAngle) - 1            #スタート角
         if i < templateIndex:
-            endAngle = 0
+            endAngle = 0                            #エンド角
         elif i == templateIndex:
             endAngle = 1
         else:
-            endAngle = int(lastAngle) + 1
+            endAngle = int(lastAngle) + 1           #右端BBの解析角
         #print("start {:4d}deg  end {:4d}deg".format(startAngle, endAngle))     #解析角度範囲
 
         #回転角度を解析
@@ -363,7 +365,7 @@ def process(filename):
                 cv2.putText(bbImg, 'XXXXXX', org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2) 
                 cv2.imshow("BB image", bbImg) 
                 cv2.waitKey(1) 
-                return bbImg
+                return bbImg, incAngle, v0, dt, "---", "error"
 
     # 回帰計算
     a,b = np.polyfit(xt, yt, 1)     # y=ax+b  
@@ -380,7 +382,11 @@ def process(filename):
     cv2.putText(bbImg, textRps2, org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2) 
     cv2.imshow("BB image", bbImg) 
 
-
+    ##ステータス
+    if di == 0:
+        statusE = ''
+    else:
+        statusE = 'Err{:1d}'.format(di)
 
     
     print ('計算完了')
@@ -391,7 +397,7 @@ def process(filename):
 
 
 
-    return bbImg
+    return bbImg, incAngle, v0, dt, rotTre, statusE
 
 
 
@@ -1113,7 +1119,6 @@ def winShow(image, name, pt, size):
     return
 
 
-
 ########  main  ######################################################################################
 #指定したフォルダの画像すべてに対して実行
 #pythonの関数の定義位置は、実際に実行するまでに定義されていればよい。
@@ -1124,15 +1129,41 @@ root = './bbpict/go'
 files = os.listdir(path = root)
 filesSorted = sorted(files)
 filesSorted.remove('.DS_Store')
+
+#日付時刻の取得してファイル名を作成
+t_delta = datetime.timedelta(hours=9)
+JST = datetime.timezone(t_delta, 'JST')
+now = datetime.datetime.now(JST)
+# YYMMDDhhmmss形式に書式化
+dTime = now.strftime('%y%m%d%H%M%S')
+csvFileName = "rotdata" + dTime + ".csv"
+#ヘッダー書き込み
+with open(csvFileName, 'w') as fCsv:     #'w'->上書き
+        writer = csv.writer(fCsv)
+        writer.writerow(['画像番号', '傾斜角度', '初速', 'センサ時間', 'ホップ回転数', '検出状態'])
+        writer.writerow(['', '°', 'm/sec', 'usec', 'rps', ''])
+
 for f in filesSorted:
     openFileName = os.path.join(root, f)
     print()
     print()
     print('filename = ', openFileName)
-    res = process(openFileName)
+    resImg, incAngle, v0, dt, bbRot, statusE  = process(openFileName)
+    ##画像をセーブ
     savedFileName = "result" + f
-    cv2.imwrite(savedFileName, res)
+    cv2.imwrite(savedFileName, resImg)
+    
+    ##測定値をcsvでセーブ
+    with open(csvFileName, 'a') as fCsv:     #'a'->アペンド
+        writer = csv.writer(fCsv)
+        writer.writerow([f, incAngle, v0, dt, bbRot, statusE])
+
+
+
+
+
     input('Returnキーを押す -> 次の画像へ')
+
 
 print('Complete')
 input('any key -> exit system')
