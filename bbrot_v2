@@ -142,7 +142,7 @@ def process(filename):
 
     #適正サイズ外のデータを除外  ########### 除外すると計算が変
     #外周にマークが被りすぎると円検出が小さくなるようだ
-    bbData2 = excludeSmall(bbData)    
+    bbData2 = excludeSmall(bbData)                  #現在は未使用#######
     bbCount2 = len(bbData2)
     ### 途中が抜けた時の処理 ーーー 未定 #######################################################
 
@@ -337,7 +337,7 @@ def process(filename):
         xt.append(i * dt)
         yt.append(matchAngle)
         r = result[-1]
-        print('{:2.0f}   t:{:7.1f} x:{:5.0f} y:{:5.0f} r:{:3.0f}   {:6.1f}deg ({:6.1f})  total {:6.1f}deg   {:6.1f}rps'.format(r[0] + 1, r[1], r[2], r[3], r[4], r[5], r[6], r[7], rotPs))        
+        print('{:2.0f}   t:{:8.2f} x:{:5.0f} y:{:5.0f} r:{:3.0f}   {:6.1f}deg ({:6.1f})  total {:6.1f}deg   {:6.1f}rps'.format(r[0] + 1, r[1], r[2], r[3], r[4], r[5], r[6], r[7], rotPs))        
         
         cv2.imshow("BB image", bbImg) 
         cv2.waitKey(1)
@@ -369,8 +369,8 @@ def process(filename):
                 cv2.imshow("BB image", bbImg) 
                 cv2.waitKey(1) 
                 return bbImg, incAngle, v0, dt, "---", "error"
-
-    print('除外データ数: {:1d}個'.format(numDel))
+    if numDel > 0:
+        print('除外データ数: {:1d}個'.format(numDel))
 
     # 回帰計算
     a,b = np.polyfit(xt, yt, 1)     # y=ax+b  
@@ -912,7 +912,7 @@ def ocrLcd(image):
             lcdImage = crop(image, ( 2400, 3250) , ( 700, 750))  #中心座標、サイズ
         if ocrType == 4:
             # 2022/10/30 P1110416.JPG~
-            lcdImage = crop(image, ( 2350, 3200) , ( 700, 300))  #中心座標、サイズ
+            lcdImage = crop(image, ( 2350, 3200) , ( 700, 450))  #中心座標、サイズ
 
         #cv2.imshow('t',lcdImage)
         #cv2.waitKey(0)
@@ -1134,19 +1134,26 @@ def winShow(image, name, pt, size):
 #pythonの関数の定義位置は、実際に実行するまでに定義されていればよい。
 #プログラムは先頭から実行されていくがdef関数定義の中身は実行されないので、実際に呼び出された時で考える。
 #ここでprocess()が呼ばれるまでにprocess()中で呼ばれる関数は定義されているのでprocess()の後に定義でもオッケー
-
+print()
+print("***** ホップ回転数　画像解析による回転数測定　*******************")
 root = './bbpict'
 files = os.listdir(path = root)
-filesSorted = sorted(files)
-filesSorted.remove('.DS_Store')
+files.remove('.DS_Store')
+files = sorted(files)
+startImgFileName = os.path.splitext(os.path.basename(files[0]))[0]    #拡張子無しファイルネーム
+endImgFileName = os.path.splitext(os.path.basename(files[-1]))[0]
+csvFileName = 'result'+startImgFileName+'-'+endImgFileName+'_hoprot.csv'
 
-#日付時刻の取得してファイル名を作成
-t_delta = datetime.timedelta(hours=9)
-JST = datetime.timezone(t_delta, 'JST')
-now = datetime.datetime.now(JST)
+print("画像 {} - {}  {:3d}枚".format(startImgFileName, endImgFileName, len(files)))
+
+##日付時刻の取得してファイル名を作成
+#t_delta = datetime.timedelta(hours=9)
+#JST = datetime.timezone(t_delta, 'JST')
+#now = datetime.datetime.now(JST)
 # YYMMDDhhmmss形式に書式化
-dTime = now.strftime('%y%m%d%H%M%S')
-csvFileName = "rotdata" + dTime + ".csv"
+#dTime = now.strftime('%y%m%d%H%M%S')
+#csvFileName = "rotdata" + dTime + ".csv"
+
 #ヘッダー書き込み
 with open(csvFileName, 'w') as fCsv:     #'w'->上書き
         writer = csv.writer(fCsv)
@@ -1154,7 +1161,7 @@ with open(csvFileName, 'w') as fCsv:     #'w'->上書き
         writer.writerow(['', '°', 'm/sec', 'usec', 'rps', ''])
 
 ### メインループ ########################################################
-for f in filesSorted:
+for f in files:
     openFileName = os.path.join(root, f)
     print()
     print()
@@ -1173,7 +1180,7 @@ for f in filesSorted:
 
     with open(csvFileName, 'a') as fCsv:     #'a'->アペンド
         writer = csv.writer(fCsv)
-        writer.writerow([f, txtIa, txtV0, txtDt, txtBbr, statusE])
+        writer.writerow([os.path.splitext(os.path.basename(f))[0], txtIa, txtV0, txtDt, txtBbr, statusE])
 
     #################
     cv2.waitKey(3000) 
