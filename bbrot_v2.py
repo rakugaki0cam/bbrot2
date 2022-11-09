@@ -14,6 +14,7 @@
 
 
 #ライブラリの読み込み
+import sys
 import math
 from webbrowser import BackgroundBrowser
 from cv2 import COLOR_GRAY2BGR, DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
@@ -337,7 +338,12 @@ def process(filename):
         xt.append(i * dt)
         yt.append(matchAngle)
         r = result[-1]
-        print('{:2.0f}   t:{:8.2f} x:{:5.0f} y:{:5.0f} r:{:3.0f}   {:6.1f}deg ({:6.1f})  total {:6.1f}deg   {:6.1f}rps'.format(r[0] + 1, r[1], r[2], r[3], r[4], r[5], r[6], r[7], rotPs))        
+        if len(result) > 1:
+            dx = r[2] - result[-2][2]
+        else:
+            dx = 0
+
+        print('{:2.0f}   t:{:8.2f} x:{:5.0f} dx:{:5.0f} y:{:5.0f} r:{:3.0f}   {:6.1f}deg ({:6.1f})  total {:6.1f}deg   {:6.1f}rps'.format(r[0] + 1, r[1], r[2], dx, r[3], r[4], r[5], r[6], r[7], rotPs))        
         
         cv2.imshow("BB image", bbImg) 
         cv2.waitKey(1)
@@ -430,6 +436,7 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
     if circles is None:
         #検出ゼロのとき
         bbData = None
+        sys.exit()
         return image, bbData
 
     #型変換
@@ -1140,6 +1147,10 @@ root = './bbpict'
 files = os.listdir(path = root)
 files.remove('.DS_Store')
 files = sorted(files)
+if len(files) == 0:
+    print("画像ファイルがないので終了します。")
+    sys.exit()
+    
 startImgFileName = os.path.splitext(os.path.basename(files[0]))[0]    #拡張子無しファイルネーム
 endImgFileName = os.path.splitext(os.path.basename(files[-1]))[0]
 csvFileName = 'result'+startImgFileName+'-'+endImgFileName+'_hoprot.csv'
@@ -1176,7 +1187,10 @@ for f in files:
     txtIa = "{:7.3f}".format(incAngle)
     txtV0 = "{:7.2f}".format(v0)
     txtDt = "{:7.2f}".format(dt)
-    txtBbr = "{:6.1f}".format(bbRot)
+    if type(bbRot) == str:
+        txtBbr = ' ---  '
+    else:
+        txtBbr = "{:6.1f}".format(bbRot)
 
     with open(csvFileName, 'a') as fCsv:     #'a'->アペンド
         writer = csv.writer(fCsv)
@@ -1189,5 +1203,5 @@ for f in files:
 
 print('Complete')
 input('any key -> exit system')
-
+sys.exit()
 
