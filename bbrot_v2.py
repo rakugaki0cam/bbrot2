@@ -43,7 +43,6 @@ green   = (0, 255, 0)
 darkGreen = (0, 127, 0)
 white   = (255, 255, 255)
 
-
 def process(filename):
     """
     写っているすべてのBB弾の角度を推定
@@ -112,8 +111,8 @@ def process(filename):
         plt.plot(hist2)  #ヒストグラム
         plt.plot(hist3)  #ヒストグラム
         plt.show()
-  
- 
+
+
     ######################### 検出方法を選択 #####################################################
     flipBGR = cv2.cvtColor(flip.copy(), cv2.COLOR_GRAY2BGR)   #イメージ出力の元画像
 
@@ -126,7 +125,7 @@ def process(filename):
         #Hough円検出による
         bbImg, bbData = circlesHough(flipBGR, median, bbPixelMin, bbPixelMax) #　ハフ円検出
 
-    if bbData == None:
+    if bbData is None:
         statusE = '円検出できず'
         print(statusE)
         winShow(bbImg, filename + detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
@@ -1201,6 +1200,7 @@ for f in files:
     #input('Returnキーを押す -> 次の画像へ')    ##自動処理
 
 print('Complete')
-input('any key -> exit system')
+print()
+input('Push any key -> exit system')
 sys.exit()
 
