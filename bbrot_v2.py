@@ -20,10 +20,10 @@ import os
 import math
 #from webbrowser import BackgroundBrowser
 import csv
+import cv2
 import pyocr
 import pyocr.builders
 #import datetime
-import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -56,6 +56,7 @@ def process(filename):
     -------
         結果をオーバーレイした画像
     """
+    global statusE, incAngle, txtDt, txtV0, dt, v0
 
     image = cv2.imread(filename)
     #画像サイズと推定BB弾寸法（撮影範囲による）
@@ -72,8 +73,8 @@ def process(filename):
     #グレースケール化(OCRで使用)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     #高さを中央付近450pxにクロップ
-    w = image.shape[1]
-    h = 450             #切り取り画像の縦ピクセル数 ### 2022/10/10 撮影高さ失敗600にて可
+    w = image.shape[1]          #GX8:5184, GX7:4592
+    h = int(image.shape[0] * 0.116) # GX8:3888, GX7:3448 -> 450pixel切り取り画像の縦ピクセル数 ### 2022/10/10 撮影高さ失敗600にて可
     top = (image.shape[0] - h) // 2
     flip = image[top: top + h, 0: w]
     #右から撃っているので、左から右への時系列になるように左右反転
@@ -92,7 +93,7 @@ def process(filename):
     minGray, threshold = cv2.threshold(median, minGray, maxGray, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
     #各処理画像の表示
-    hw = 350    #表示座標y
+    hw = 350    #ディスプレイ上の表示座標y
     hwd = 140
     winShow(flip, 'flip', (700, hw), (w // 4, h // 4))  #1/4に縮小
     winShow(scaled, 'scaled', (700, hw + hwd), (w // 4, h // 4))
@@ -156,7 +157,7 @@ def process(filename):
 
     #bb進行方向の傾斜角度の計算
     dX, dY, incAngle = inclinationAngle(bbData)
-    print('傾斜角度: {:6.3f}/{:6.1f} = {:6.3f}deg'.format(dY, dX, incAngle))
+    print(f'傾斜角度: {dY:6.3f}/{dX:6.1f} = {incAngle:6.3f}deg')
 
 
     #BB弾検出結果から作業用画像を再度正確にクロップする
@@ -187,11 +188,11 @@ def process(filename):
         dt = float(txtDt)
     except ValueError:
         dt = 1000000    #ゼロだとエラーでとまるため大きい数値に
-    print('周期時間読取テキスト "{}" '.format(txtDt), end = ' ')
-    try:    
+    print(f'周期時間読取テキスト "{txtDt}" ', end = ' ')
+    try:
         txtV0 = float(txtV0)
     except ValueError:
-        print('*** 読み取り初速値がエラー　"{}"   周期時間値がOKの時はreturnキーを押す'.format(txtV0))
+        print(f'*** 読み取り初速値がエラー "{txtV0}"   周期時間値がOKの時はreturnキーを押す')
         txtV0 = 99999
 
     #初速の計算で周期値の読み取りが正しいかを確認
@@ -199,9 +200,9 @@ def process(filename):
     if abs(txtV0 - v0) >= 0.1:
         #初速の計算値が合わない時
         if txtV0 != 99999:
-            print('*** 読み取り初速値　"{}"と計算値{:6.2f}m/sが合わない  周期時間値がOKの時はreturnキーを押す'.format(txtV0, v0))
+            print(f'*** 読み取り初速値 "{txtV0}"と計算値{v0:6.2f}m/sが合わない  周期時間値がOKの時はreturnキーを押す')
         #周期をキー入力
-        while(1):
+        while True:
             inpTxt = input('コマ間の周期時間 [usec] = ')
             dtMin = 100     #usec  @v0=120m/sec
             dtMax = 1000    #usec  @v0=12m/sec
@@ -210,21 +211,21 @@ def process(filename):
                 if (dt > dtMin and dt < dtMax):     #12 ~ 100m/sec (@12mm)
                     break
                 else:
-                    continue   
+                    continue
             dt = float(inpTxt)
             if (dt > dtMin and dt < dtMax):
                 v0 = 0.012 / (dt / 1000000)         #初速の計算を入力値でやり直し
                 break
     #OK
-    print('  周期dt = {:6.2f}usec'.format(dt), end = " ")   #周期値
-    print('  初速v0 = {:6.2f}m/sec'.format(v0))       #初速
+    print(f'  周期dt = {dt:6.2f}usec', end = " ")   #周期値
+    print(f'  初速v0 = {v0:6.2f}m/sec')             #初速
 
     #画像へコマ周期、初速、ファイル名を書き込み
-    text = "{} circles:{:2d}  v0:{:6.2f}m/sec  dt:{:6.2f}usec  incline:{:6.3f}deg  ({})".format(detectMethod, bbCount, v0, dt, incAngle, filename)
+    text = f"{detectMethod} circles:{bbCount:2d}  v0:{v0:6.2f}m/sec  dt:{dt:6.2f}usec  incline:{incAngle:6.3f}deg  ({filename})"
     locate = (int(bbData[0][1]), int(bbData[0][2] + 100))
     cv2.putText(bbImg, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
 
-    cv2.imshow("BB image", bbImg) 
+    cv2.imshow("BB image", bbImg)
     cv2.imshow('scaled', scaled)
     cv2.imshow('median', median)
     cv2.waitKey(1)
@@ -234,7 +235,7 @@ def process(filename):
 
     #カメラ撮影光軸中心付近のBB弾をテンプレートとする
     indexCenter = bbCount // 2    #//の答えは整数となる 標準条件で7となる
-    #標準条件: ストロボ発光間隔　初速12mm距離の時間、発光回数　15回 
+    #標準条件: ストロボ発光間隔　初速12mm距離の時間、発光回数　15回
 
     tpCenter = (bbData[indexCenter][1], bbData[indexCenter][2])     #BB中心
     bbDia = bbData[indexCenter][3] * 2                              #BB直径
@@ -244,7 +245,7 @@ def process(filename):
     imgc = crop(scaled, tpCenter, (tpDia, tpDia))
     template = mask_circle(imgc, tpDia)
     #2値化オプション??  ###
-    #ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU) 
+    #ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
     #########特徴点検出用テンプレート（周辺画像までいれて広くしないと特徴点が検出されない）
     #template2 = crop(median, tpCenter,(tpDia * 3, tpDia * 3))
@@ -275,14 +276,14 @@ def process(filename):
             # 右端の回転角を先に読み取り
             point2 = (bbData[bbCount-1][1], bbData[bbCount-1][2])   #右端のBB中心
             endAngle = int(- firstAngle * 1.2)                      #左端の読取角＋α
-            lastAngle, matchVal = estimateRot(scaled, template, 0, endAngle, point2, bbDia)
+            lastAngle, _ = estimateRot(scaled, template, 0, endAngle, point2, bbDia)
             endAngle = 1
         else:
             endAngle = int(lastAngle) + 1           #右端BBの読取角
         #print("start {:4d}deg - end {:4d}deg".format(startAngle, endAngle))     #解析角度範囲
 
         #回転角を読み取り
-        matchAngle, matchVal = estimateRot(scaled, template, startAngle, endAngle, point, bbDia)    # scaled
+        matchAngle, _ = estimateRot(scaled, template, startAngle, endAngle, point, bbDia)    # scaled
         #print("{:5.1f}deg  Match value:{:10.0f}".format(matchAngle, matchVal))
 
         #########################################################
@@ -307,10 +308,10 @@ def process(filename):
         wholeAngle = matchAngle - firstAngle
         prevAngle = matchAngle
 
-        txtMatchAng = '{:6.1f}deg'.format(matchAngle)
+        txtMatchAng = f'{matchAngle:6.1f}deg'
         cv2.putText(bbImg, txtMatchAng, org = (point[0] + 30, point[1] - 60), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = mazenta, thickness = 1)
         if i >= 1:
-            textdAng = '({:5.1f})'.format(dAngle)
+            textdAng = f'({dAngle:5.1f})'
             cv2.putText(bbImg, textdAng, org = (point[0] + 65, point[1] - 30), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = yellow, thickness = 1)
 
         #回転角の書き込み
@@ -320,7 +321,7 @@ def process(filename):
             rotPs = 0
 
         if i > indexCenter:
-            textRps =  '{:6.1f}rps'.format (rotPs)
+            textRps =  f'{rotPs:6.1f}rps'
             cv2.putText(bbImg, textRps, org = (point[0] + 0, point[1] + 90), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.8, color = white, thickness = 1)
             #中心振り分けでの回転数計算
             dk = i - indexCenter
@@ -329,7 +330,7 @@ def process(filename):
             except ZeroDivisionError:
                 rotPs2 = 0
 
-            textRps =  '{:6.1f}rps'.format (rotPs2)
+            textRps =  f'{rotPs2:6.1f}rps'
             cv2.putText(bbImg, textRps, org = (point[0] + 10, point[1] + 108), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.6, color = yellow, thickness = 1)
 
         result.append((i, i * dt, point[0], point[1], bbData[i][3], matchAngle, dAngle, wholeAngle, rotPs))
@@ -341,9 +342,9 @@ def process(filename):
         else:
             dx = 0
 
-        print('{:2.0f}   t:{:8.2f} x:{:5.0f} dx:{:5.0f} y:{:5.0f} r:{:3.0f}   {:6.1f}deg ({:6.1f})  total {:6.1f}deg   {:6.1f}rps'.format(r[0] + 1, r[1], r[2], dx, r[3], r[4], r[5], r[6], r[7], rotPs))        
+        print(f'{(r[0] + 1):2.0f}   t:{r[1]:8.2f} x:{r[2]:5.0f} dx:{dx:5.0f} y:{r[3]:5.0f} r:{r[4]:3.0f}   {r[5]:6.1f}deg ({r[6]:6.1f})  total {r[7]:6.1f}deg   {rotPs:6.1f}rps')
 
-        cv2.imshow("BB image", bbImg) 
+        cv2.imshow("BB image", bbImg)
         cv2.waitKey(1)
 
 
@@ -356,50 +357,49 @@ def process(filename):
 
     # 異常値の検出　da
     aveDa = result[-1][7] / (bbCount - 1)
-    print('コマ間角度変化分の平均値 {:6.1f}°'.format(aveDa))
+    print(f'コマ間角度変化分の平均値 {aveDa:6.1f}°')
 
     numDel = 0
     for i, r in enumerate(result):
         if i == 0:
             continue
-        if r[6] > aveDa * 1.2 or r[6] < aveDa * 0.8:  
-            print('{:2d}コマ目 - {:6.1f}° は異常値のため除外'.format(i + 1, r[6]))
+        if r[6] > aveDa * 1.2 or r[6] < aveDa * 0.8:
+            print(f'{(i + 1):2d}コマ目 - {r[6]:6.1f}° は異常値のため除外')
             del xt[i - numDel]
             del yt[i - numDel]
             numDel += 1     #デリートすると1つ詰まって、添字の位置が変わる
             if numDel > 8:  #9つ目で中止
                 print("***** 読み取り不可 *****")
-                cv2.putText(bbImg, 'XXXXXX', org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2) 
-                cv2.imshow("BB image", bbImg) 
-                cv2.waitKey(1) 
+                cv2.putText(bbImg, 'XXXXXX', org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2)
+                cv2.imshow("BB image", bbImg)
+                cv2.waitKey(1)
                 return bbImg, incAngle, v0, dt, "---", "error"
     if numDel > 0:
-        print('除外データ数: {:1d}個'.format(numDel))
+        print(f'除外データ数: {numDel:1d}個')
 
     # 回帰計算
-    a,b = np.polyfit(xt, yt, 1)     # y=ax+b  
+    a,b = np.polyfit(xt, yt, 1)     # y=ax+b
 
-    print('直線回帰式　y = {:7.4f}x {:+8.2f}   y:角度  x:時刻 '.format(a, b))
+    print(f'直線回帰式 y = {a:7.4f}x {b:+8.2f}   y:角度  x:時刻 ')
     x0 = result[0][0]
     x1 = result[bbCount - 1][0]
     y0 = a * x0 + b
     y1 = a * x1 + b
     rotReg = (y1 - y0) / 360 / ((x1 - x0)/ 1000000)
-    print('ホップ回転数{:6.1f}rps (回帰計算による)'.format(rotReg))
-    textRps =  '{:6.1f}rps'.format (rotReg)
-    
-    cv2.putText(bbImg, textRps, org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2) 
-    cv2.imshow("BB image", bbImg) 
+    print(f'ホップ回転数{rotReg:6.1f}rps (回帰計算による)')
+    textRps = f'{rotReg:6.1f}rps'
+
+    cv2.putText(bbImg, textRps, org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2)
+    cv2.imshow("BB image", bbImg)
 
     ##ステータス
     if numDel == 0:
         statusE = ''
     else:
-        statusE = 'Err{:1d}'.format(numDel)
+        statusE = f'Err{numDel:1d}'
 
-    
     print ('計算完了')
-    
+
     #################
     #cv2.waitKey(200) ##################### 0: WAIT ############### 200: moment
     ##################
@@ -434,8 +434,8 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
     if circles is None:
         #検出ゼロのとき
         bbData = None
-        sys.exit()
-        return image, bbData
+        sys.exit()  # end of program
+        #return image, bbData
 
     #型変換
     circles = np.uint16(np.around(circles))
@@ -447,7 +447,7 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
         cv2.circle(image, (c[0], c[1]), c[2], green, thickness = 1)
         # 中心点を描画する
         cv2.drawMarker(image, (c[0], c[1]), darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
-    
+
     #x位置順にソート
     circles = sorted(circles, key=lambda x: x[0])    #x[0]:x座標
     #BBデータを整理
@@ -458,7 +458,7 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
         bbnum += 1
 
     #円の個数
-    bbcount = len(bbData)
+    #bbcount = len(bbData)
     #print(f'Hough circles: {bbcount}')
     #print(bbData)
     return image, bbData
@@ -509,7 +509,7 @@ def circlesBlobs(image, threshold, minGray, maxGray, bbPixelMin, bbPixelMax):
         bbnum += 1
 
     #ブロブの個数
-    bbcount = len(bbData)
+    #bbcount = len(bbData)
     #print(f'blob circles: {bbcount}')
     #print(bbData)
     return  image, bbData
@@ -564,7 +564,7 @@ def blobsDetect(image, minGray, maxGray, bbPixelMin, bbPixelMax):
         detector = cv2.SimpleBlobDetector(params)
     else:
         #openCV ver.3~
-        detector = cv2.SimpleBlobDetector_create(params)  
+        detector = cv2.SimpleBlobDetector_create(params)
 
     #検出器を作動（ブロブを検出する）
     keypoints = detector.detect(image)
@@ -592,8 +592,8 @@ def excludeSmall(bbData):
     sumSize = 0
     for b in bbData:
         sumSize += b[3]
-    bbAve = sumSize / bbCount    
-    print('BB平均直径 = {:4.1f}px'.format(bbAve * 2), end = ' ')
+    bbAve = sumSize / bbCount
+    print(f'BB平均直径 = {(bbAve * 2):4.1f}px', end = ' ')
 
     #判定サイズの計算
     bbMin = 0.95 * bbAve
@@ -606,7 +606,7 @@ def excludeSmall(bbData):
     for i, b in enumerate(bbData):
         #小さすぎるものを除外する
         if (b[3] > bbMax) or (b[3] < bbMin):
-            print('No.{:2.0f}  {:5.1f}px はサイズ不適合'.format(i, b[3] * 2))
+            print(f'No.{i:2.0f}  {(b[3] * 2):5.1f}px はサイズ不適合')
         else:
             #合格のデータだけで再構成
             bbData2.append([newIndex, b[1], b[2], b[3]])
@@ -631,6 +631,8 @@ def  inclinationAngle(bbData):
         y変位
         進行方向の角度（仰俯角）
     """
+
+    global incAngle
 
     num = len(bbData)
     dY = float(bbData[num - 1][2]) - float(bbData[0][2])
@@ -719,7 +721,7 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
     マッチング値
     """
     angle = -1
-    max = -9999999999
+    max9 = -9999999999
     ext = 10    #周りを少し広く
     cr = crop(image, pt, (size + ext, size + ext ))
     #周囲を白く
@@ -730,21 +732,20 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
     (w, h) = template.shape[: : -1]
 
     #### whole test #####
-    '''
-    img2 = image.copy()
-    matchResult = cv2.matchTemplate(img2, template, cv2.TM_CCOEFF)
-    _, maxVal, _, maxLoc = cv2.minMaxLoc(matchResult)   ###minVal,maxVal,minIndex,maxIndex
-    topLeft = maxLoc
-    bottomRight = (topLeft[0] + w, topLeft[1] + h)
-    cv2.rectangle(img2, topLeft, bottomRight, (255, 0, 255), 3)
-    #マッチリザルト
-    plt.subplot(121),plt.imshow(matchResult, cmap = 'gray')
-    plt.title('Matching Result'), plt.xticks([]), plt.yticks([])
-    plt.subplot(122),plt.imshow(img2, cmap = 'gray')
-    plt.title('Detected Point'), plt.xticks([]), plt.yticks([])
-    plt.show()
-    #うまくいかない
-    '''
+    # img2 = image.copy()
+    # matchResult = cv2.matchTemplate(img2, template, cv2.TM_CCOEFF)
+    # _, maxVal, _, maxLoc = cv2.minMaxLoc(matchResult)   ###minVal,maxVal,minIndex,maxIndex
+    # topLeft = maxLoc
+    # bottomRight = (topLeft[0] + w, topLeft[1] + h)
+    # cv2.rectangle(img2, topLeft, bottomRight, (255, 0, 255), 3)
+    # マッチリザルト
+    # plt.subplot(121),plt.imshow(matchResult, cmap = 'gray')
+    # plt.title('Matching Result'), plt.xticks([]), plt.yticks([])
+    # plt.subplot(122),plt.imshow(img2, cmap = 'gray')
+    # plt.title('Detected Point'), plt.xticks([]), plt.yticks([])
+    # plt.show()
+    # うまくいかない
+    #
     #######################
 
 
@@ -757,18 +758,18 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
         matchResult = cv2.matchTemplate(cr, tp, cv2.TM_CCOEFF)
         _, maxVal, _, maxLoc = cv2.minMaxLoc(matchResult)   ###minVal,maxVal,minIndex,maxIndex
 
-        if(maxVal > max):
+        if maxVal > max9:
             cr2 = cr.copy()
             cr2 = cv2.cvtColor(cr2, cv2.COLOR_GRAY2BGR)
             matchAngle = angle
-            max = maxVal
+            max9 = maxVal
             if denomi <= 2:
                 #細かく計算する時は表示しない
                 #角度表示
                 cv2.putText(tp, str(matchAngle), org = (0, 15), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
                 # org は左下の座標
                 #マッチ値表示
-                cv2.putText(tp, str(int(max)), org = (0, 100), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
+                cv2.putText(tp, str(int(max9)), org = (0, 100), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
                 topLeft = maxLoc
                 bottomRight = (topLeft[0] + w, topLeft[1] + h)
                 cv2.rectangle(cr2, topLeft, bottomRight, (255, 0, 255), 1)
@@ -782,7 +783,7 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
                 #im = ax.imshow(matchResult, cmap="jet")
                 #plt.show()
 
-    return matchAngle, max
+    return matchAngle, max9
 
 
 def contourMatch(image, template, pt, size):
@@ -851,17 +852,17 @@ def match(img1, img2):
         toKp.append([k.pt[0],k.pt[1]])
     toKp   = np.reshape(toKp, (-1, 1, 2))
 
-    aA, inliers = cv2.estimateAffinePartial2D(fromKp, toKp)     #2つの変数の数が合わないとダメなよう
+    aA, _ = cv2.estimateAffinePartial2D(fromKp, toKp)     #2つの変数の数が合わないとダメなよう
 
     #平行移動量
-    mM = aA[:2, :2]
-    t = aA[:, 2]
-    #回転角度
+    # mM = aA[:2, :2]
+    # t = aA[:, 2]
+    # print(' M', mM, 't', t)
+    # #回転角度
     degree = np.rad2deg(-np.arctan2(aA[0, 1], aA[0, 0]))
-    print('特徴点　回転角度＝' , degree)
-    #print(' M', mM, 't', t)
+    print('特徴点 回転角度＝' , degree)
 
-    textDa = '{:6.2f}deg'.format(degree)
+    textDa = 'f{degree:6.2f}deg'
     cv2.putText(img3, textDa, org = (160, 250), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 1)
 
     cv2.imshow('keypoint match', img3)
@@ -923,7 +924,7 @@ def ocrLcd(image):
         #cv2.waitKey(0)
         lcdImage = cv2.convertScaleAbs(lcdImage, alpha = 0.5, beta = -20)
         lcdImage = cv2.medianBlur(lcdImage, ksize = 3) #ksizeは奇数
-        ret, lcdImage2 = cv2.threshold(lcdImage, 0, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+        ret, _ = cv2.threshold(lcdImage, 0, 255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)
         #print('OCR用二値化 大津の閾値:', ret)
         ret, lcdImage = cv2.threshold(lcdImage, ret + 35, 255,cv2.THRESH_BINARY)
         #retはOTSUのときのしきい値
@@ -962,11 +963,11 @@ def ocrLcd(image):
     tools = pyocr.get_available_tools()
     if len(tools) == 0:
         #print("No OCR tool found")
-        SystemExit(1)
+        sys.exit()
 
     tool = tools[0]
     #print("will use tool '%s'" % (tool.get_name()))
-    langs = tool.get_available_languages()
+    #langs = tool.get_available_languages()
     #print("available languages: %s" % ", ".join(langs))
 
     #builder = pyocr.builders.TextBuilder(tesseract_layout =  6) #text
@@ -999,7 +1000,7 @@ def ocrLcd(image):
 
     #usが識別できなかった時
     if rvI < 2:
-        readVal = txt[-2].content 
+        readVal = txt[-2].content
         readV0 = txt[-4].content
     else:
         readV0 = txt[rvI - 2].content
@@ -1039,7 +1040,7 @@ def crop(image, pt, size):
     """
     left = int(pt[0] - size[0] / 2)
     if left < 0:
-        left = 0      
+        left = 0
     right = int(pt[0] + size[0] / 2)
     top = int(pt[1] - size[1] / 2)
     if top < 0:
@@ -1070,7 +1071,7 @@ def rot(image, degree):
     回転した画像
     """
     (h, w) = (0, 0)
-    if(len(image.shape)):
+    if len(image.shape):
         #gray scale
         (h, w) = image.shape
         bg = 255
@@ -1140,7 +1141,7 @@ def winShow(image, name, pt, size):
 #プログラムは先頭から実行されていくがdef関数定義の中身は実行されないので、実際に呼び出された時で考える。
 #ここでprocess()が呼ばれるまでにprocess()中で呼ばれる関数は定義されているのでprocess()の後に定義でもオッケー
 print()
-print("***** ホップ回転数　画像解析による回転数測定　*******************")
+print("***** ホップ回転数 画像解析による回転数測定 *******************")
 root = './bbpict'
 files = os.listdir(path = root)
 files.remove('.DS_Store')
@@ -1153,7 +1154,7 @@ startImgFileName = os.path.splitext(os.path.basename(files[0]))[0]    #拡張子
 endImgFileName = os.path.splitext(os.path.basename(files[-1]))[0]
 csvFileName = 'result'+startImgFileName+'-'+endImgFileName+'_hoprot.csv'
 
-print("画像 {} - {}  {:3d}枚".format(startImgFileName, endImgFileName, len(files)))
+print(f"画像 {startImgFileName} - {endImgFileName}  {len(files):3d}枚")
 
 ##日付時刻の取得してファイル名を作成
 #t_delta = datetime.timedelta(hours=9)
@@ -1164,7 +1165,7 @@ print("画像 {} - {}  {:3d}枚".format(startImgFileName, endImgFileName, len(fi
 #csvFileName = "rotdata" + dTime + ".csv"
 
 #ヘッダー書き込み
-with open(csvFileName, 'w') as fCsv:     #'w'->上書き
+with open(csvFileName, 'w', encoding="utf-8") as fCsv:     #'w'->上書き
     writer = csv.writer(fCsv)
     writer.writerow(['画像番号', '傾斜角度', '初速', 'センサ時間', 'ホップ回転数', '検出状態'])
     writer.writerow(['', '°', 'm/sec', 'usec', 'rps', ''])
@@ -1182,15 +1183,15 @@ for f in files:
 
     ##測定値をcsvでセーブ
     #数値の整形
-    txtIa = "{:7.3f}".format(incAngle)
-    txtV0 = "{:7.2f}".format(v0)
-    txtDt = "{:7.2f}".format(dt)
-    if type(bbRot) == str:
+    txtIa = f"{incAngle:7.3f}"
+    txtV0 = f"{v0:7.2f}"
+    txtDt = f"{dt:7.2f}"
+    if isinstance(bbRot, str):
         txtBbr = ' ---  '
     else:
-        txtBbr = "{:6.1f}".format(bbRot)
+        txtBbr = f"{bbRot:6.1f}"
 
-    with open(csvFileName, 'a') as fCsv:     #'a'->アペンド
+    with open(csvFileName, 'a', encoding="utf-8") as fCsv:     #'a'->アペンド
         writer = csv.writer(fCsv)
         writer.writerow([os.path.splitext(os.path.basename(f))[0], txtIa, txtV0, txtDt, txtBbr, statusE])
 
