@@ -1,7 +1,7 @@
 #   bbrot.py
 #                   v2
 #
-#       2022.07.09
+#   2022.07.09
 #
 #   変更履歴
 #   2022.10.10  OCR仕様変更ー表示器をdeBUGgerからOLEDに変更のため。
@@ -9,12 +9,11 @@
 #               解析の時の角度を前回値から推定することで解析角度を狭めて高速化。
 #               解析結果をcsvファイルに書き出し。
 #   2022.10.29  OLED表示フォントを作ったのでOCR読み取り精度が上がった。ほぼOK。->読み取り自動化。
+#   2023.04.18  角度0度の時の異常値判定を回避
 #
 #
-
 
 #ライブラリの読み込み
-
 import sys
 import os
 import math
@@ -260,7 +259,8 @@ def process(filename):
     xt = []
     yt = []
     #回転方向を限定して、読取回転角を制限＝回転角がいったりきたりしなくなる->異常値エラーになる
-    startAngle = -358           #スタート角
+    startAngle = -350  #-358           #スタート角
+    #startAngle = -179           #スタート角  2023.4.17 ほとんどかわらない（エラーを救えなかった）
     matchAngle = startAngle
     endAngle = 0
     firstAngle = 999
@@ -363,8 +363,14 @@ def process(filename):
     for i, r in enumerate(result):
         if i == 0:
             continue
-        if r[6] > aveDa * 1.2 or r[6] < aveDa * 0.8:
-            print(f'{(i + 1):2d}コマ目 - {r[6]:6.1f}° は異常値のため除外')
+        limUp = aveDa * 1.2     #aveDaが小さいときにだめなので1度にする
+        if limUp < 1:
+            limUp = 1
+        limLow = aveDa * 0.8    #aveDaが小さいときマイナスになることもあるので-1度として読み取り角度が0.0の時にエラーにさせない
+        if limLow < 1:
+            limLow = -1
+        if r[6] > limUp or r[6] < limLow:
+            print(f'{(i + 1):2d}コマ目 - {r[6]:6.1f}° は異常値のため除外')      #aveDaがマイナスの時（回転が微妙かゼロの時）に異常値判定になってしまう。
             del xt[i - numDel]
             del yt[i - numDel]
             numDel += 1     #デリートすると1つ詰まって、添字の位置が変わる

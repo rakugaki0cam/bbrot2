@@ -4,6 +4,6 @@
     "python.linting.enabled": true,
     "python.linting.pylintArgs": [
         "--extension-pkg-whitelist = cv2"
-    ],//追加？？効かない
+    ],
 }
 
