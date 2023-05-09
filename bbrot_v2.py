@@ -10,7 +10,9 @@
 #               解析結果をcsvファイルに書き出し。
 #   2022.10.29  OLED表示フォントを作ったのでOCR読み取り精度が上がった。ほぼOK。->読み取り自動化。
 #   2023.04.18  角度0度の時の異常値判定を回避
-#
+#   2023.05.08  bbpictディレクトリ内の画像ファイル読込の際、子ディレクトリを除外しエラー回避
+#   2023.05.08  読み取りエラーの時、解析角度範囲を狭めてやり直し...少しは救われるデータあり。時間かかる以外悪くなるところはないので採用
+#   2023.05.09  BB弾回転アニメ.gifファイルを出力   
 #
 
 #ライブラリの読み込み
@@ -25,7 +27,7 @@ import pyocr.builders
 #import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
+from PIL import Image, ImageDraw
 
 sys.path.append('/path/to/dir')
 
@@ -42,7 +44,7 @@ green   = (0, 255, 0)
 darkGreen = (0, 127, 0)
 white   = (255, 255, 255)
 
-def process(filename):
+def process(filename, mode):
     """
     写っているすべてのBB弾の角度を推定
 
@@ -50,7 +52,10 @@ def process(filename):
     ----------
     filename : string
         画像ファイル名
-
+    mode: string
+        360standard - 標準角度範囲-360〜360度    
+        180redo ----- 範囲を-180〜180度にせばめてやり直し
+        90redo ----- 範囲を-90〜90度にせばめてやり直し
     Returns
     -------
         結果をオーバーレイした画像
@@ -172,7 +177,17 @@ def process(filename):
 
     #print('BBデータ [n,x,y,r]: ', bbData)
 
-    #円周と中心点を描画
+    #円周と中心点を描画    
+
+    gifImages = []
+    #GIFアニメ用画像をクロップ
+    for b in bbData:
+        img = Image.fromarray(crop(bbImg, (b[1],b[2]), (150,150)))  #pillowに変換
+        gifImages.append(img)
+
+    fn2 = os.path.splitext(os.path.basename(filename))[0]    #拡張子無しファイルネーム
+    gifImages[0].save('gif'+fn2+'.gif', save_all=True, append_images=gifImages[1:], optimize=False, duration=100, loop=0)    
+
     for b in bbData:
         cv2.circle(bbImg, (b[1], b[2]), b[3], green, thickness = 1)
         cv2.drawMarker(bbImg, (b[1], b[2]), darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
@@ -259,8 +274,14 @@ def process(filename):
     xt = []
     yt = []
     #回転方向を限定して、読取回転角を制限＝回転角がいったりきたりしなくなる->異常値エラーになる
-    startAngle = -350  #-358           #スタート角
-    #startAngle = -179           #スタート角  2023.4.17 ほとんどかわらない（エラーを救えなかった）
+    if mode == '360standard':
+        startAngle = -350  #-358  
+    elif mode == '180redo':
+        startAngle = -178           #スタート角  2023.4.17 ほとんどかわらない（エラーを救えなかった）
+    elif mode == '90redo':
+        startAngle = -88            #スタート角    
+    
+
     matchAngle = startAngle
     endAngle = 0
     firstAngle = 999
@@ -291,6 +312,18 @@ def process(filename):
         #angle2 = contourMatch(median, template2, point, bbDia)
         #########################################################
 
+        
+        if firstAngle == 999:
+            firstAngle = matchAngle     #最初のコマの角度
+            prevAngle = matchAngle      #初回の代入で必要
+
+
+
+        #変化角度の確認
+        dAngle = matchAngle - prevAngle
+        ###################################################
+        
+
         #回転角度の線を表示
         lineLen = 160 // 2
         matchRad = math.radians(matchAngle)
@@ -299,12 +332,7 @@ def process(filename):
         pt2 = np.subtract(point, dl).astype(np.int16)
         cv2.line(bbImg, pt1, pt2, mazenta, thickness = 1)
 
-        if firstAngle == 999:
-            firstAngle = matchAngle     #最初のコマの角度
-            prevAngle = matchAngle      #初回の代入で必要
-
         #角度の書き込み
-        dAngle = matchAngle - prevAngle
         wholeAngle = matchAngle - firstAngle
         prevAngle = matchAngle
 
@@ -378,8 +406,21 @@ def process(filename):
                 print("***** 読み取り不可 *****")
                 cv2.putText(bbImg, 'XXXXXX', org = (px, py), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 2)
                 cv2.imshow("BB image", bbImg)
-                cv2.waitKey(1)
+                cv2.waitKey(3000)
+
+                #範囲を狭めて再計算させる
+                if (mode == '360standard'):
+                    #画像解析角度範囲をー180〜180度に制限してもう一度やり直しする　################
+                    print("読み取りエラーのため、解析範囲を-180〜180度にせばめて再計算します。")
+                    statusE = "180redo"
+                    return bbImg, incAngle, v0, dt, "---", statusE 
+                elif (mode == '180redo'):
+                    #画像解析角度範囲をー90〜90度に制限してもう一度やり直しする　################
+                    print("読み取りエラーのため、解析範囲を-90〜90度にせばめて再計算します。")
+                    statusE = "90redo"
+                    return bbImg, incAngle, v0, dt, "---", statusE
                 return bbImg, incAngle, v0, dt, "---", "error"
+            
     if numDel > 0:
         print(f'除外データ数: {numDel:1d}個')
 
@@ -432,6 +473,7 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
     Returns
     -------
         円検出画像
+
         円位置座標とサイズ
     """
     #　ハフ円検出
@@ -440,8 +482,7 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
     if circles is None:
         #検出ゼロのとき
         bbData = None
-        sys.exit()  # end of program
-        #return image, bbData
+        return image, bbData
 
     #型変換
     circles = np.uint16(np.around(circles))
@@ -723,7 +764,7 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
 
     Returns
     -------
-    回転角 -360~+360(deg)
+    マッチング角度 -360~+360(deg)
     マッチング値
     """
     angle = -1
@@ -809,7 +850,7 @@ def contourMatch(image, template, pt, size):
 
     Returns
     -------
-    回転角 -180~+180(deg)#####################
+    マッチング角度 -180~+180(deg)#####################
     """
 
     ext = 200    #周りを少し広く
@@ -1149,8 +1190,14 @@ def winShow(image, name, pt, size):
 print()
 print("***** ホップ回転数 画像解析による回転数測定 *******************")
 root = './bbpict'
-files = os.listdir(path = root)
-files.remove('.DS_Store')
+rootFiles = os.listdir(path = root)
+rootFiles.remove('.DS_Store')
+files = []
+#ディレクトリを除外
+for f in rootFiles:
+    if os.path.isfile(root+'/'+f) is True:
+        files.append(f)
+
 files = sorted(files)
 if len(files) == 0:
     print("画像ファイルがないので終了します。")
@@ -1182,7 +1229,14 @@ for f in files:
     print()
     print()
     print('filename = ', openFileName)
-    resImg, incAngle, v0, dt, bbRot, statusE  = process(openFileName)
+    resImg, incAngle, v0, dt, bbRot, statusE  = process(openFileName, '360standard')
+    if statusE =='180redo':
+        #広範囲角度解析で不具合が出ている時-180〜180度でやり直し
+        resImg, incAngle, v0, dt, bbRot, statusE  = process(openFileName, '180redo')
+        if statusE =='90redo':
+            #広範囲角度解析で不具合が出ている時-180〜180度でやり直し
+            resImg, incAngle, v0, dt, bbRot, statusE  = process(openFileName, '90redo') ##すこしは救われるみたい。低回転側は無理な感じ
+
     ##画像をセーブ
     savedFileName = "result" + f
     cv2.imwrite(savedFileName, resImg)
