@@ -27,7 +27,7 @@ import pyocr.builders
 #import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image, ImageDraw
+from PIL import Image
 
 sys.path.append('/path/to/dir')
 
@@ -121,7 +121,7 @@ def process(filename, mode):
     ######################### 検出方法を選択 #####################################################
     flipBGR = cv2.cvtColor(flip.copy(), cv2.COLOR_GRAY2BGR)   #イメージ出力の元画像
 
-    #detectMethod = "Blobs"
+    #detectMethod = "Blobs" #少し小さくなるようだ。検出できないことも多い。
     detectMethod = "Hough"
     if detectMethod == 'Blobs':
         #Blob円検出による
@@ -148,6 +148,7 @@ def process(filename, mode):
     #外周にマークが被りすぎると円検出が小さくなるようだ
     bbData2 = excludeSmall(bbData)                  #現在は未使用#######
     bbCount2 = len(bbData2)
+
     ### 途中が抜けた時の処理 ーーー 未定 #######################################################
 
     print('適正BB数', bbCount2)
@@ -177,21 +178,31 @@ def process(filename, mode):
 
     #print('BBデータ [n,x,y,r]: ', bbData)
 
-    #円周と中心点を描画    
-
+    #BB弾の回転アニメをGIFファイルで出力
+    cv2Image = []
     gifImages = []
-    #GIFアニメ用画像をクロップ
     for b in bbData:
-        img = Image.fromarray(crop(bbImg, (b[1],b[2]), (150,150)))  #pillowに変換
-        gifImages.append(img)
+        imgCrop = crop(bbImg, (b[1],b[2]), (150,150))  #BB玉をクロップ
+        cv2Image.append(imgCrop)                #cv2 imageのまま保存
 
-    fn2 = os.path.splitext(os.path.basename(filename))[0]    #拡張子無しファイルネーム
-    gifImages[0].save('gif'+fn2+'.gif', save_all=True, append_images=gifImages[1:], optimize=False, duration=100, loop=0)    
+        imgPillow = Image.fromarray(imgCrop)    #pillow用画像に変換
+        gifImages.append(imgPillow)             #gif image
 
+    imageNum = os.path.splitext(os.path.basename(filename))[0]    #拡張子無しファイルネームを切り出し
+    #pillow画像からGIFファイルにしてセーブ
+    gifImages[0].save('gif'+imageNum+'.gif', save_all=True, append_images=gifImages[1:], optimize=False, duration=100, loop=0)    
+
+   #BB回転アニメーション
+    for im in cv2Image:
+        winShow(im, 'gif', (240, 200), (100, 100))
+        cv2.waitKey(100)
+
+    #円周と中心点を描画
     for b in bbData:
         cv2.circle(bbImg, (b[1], b[2]), b[3], green, thickness = 1)
         cv2.drawMarker(bbImg, (b[1], b[2]), darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
     cv2.waitKey(1)
+
 
 
     #### OCR ########################################################
