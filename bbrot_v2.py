@@ -422,12 +422,12 @@ def process(filename, mode):
                 #範囲を狭めて再計算させる
                 if (mode == '360standard'):
                     #画像解析角度範囲をー180〜180度に制限してもう一度やり直しする　################
-                    print("読み取りエラーのため、解析範囲を-180〜180度にせばめて再計算します。")
+                    print("***** 解析範囲を-180〜180度にせばめて再計算します")
                     statusE = "180redo"
                     return bbImg, incAngle, v0, dt, "---", statusE 
                 elif (mode == '180redo'):
                     #画像解析角度範囲をー90〜90度に制限してもう一度やり直しする　################
-                    print("読み取りエラーのため、解析範囲を-90〜90度にせばめて再計算します。")
+                    print("***** 解析範囲を-90〜90度にせばめて再計算します")
                     statusE = "90redo"
                     return bbImg, incAngle, v0, dt, "---", statusE
                 return bbImg, incAngle, v0, dt, "---", "error"
@@ -1199,7 +1199,14 @@ def winShow(image, name, pt, size):
 #プログラムは先頭から実行されていくがdef関数定義の中身は実行されないので、実際に呼び出された時で考える。
 #ここでprocess()が呼ばれるまでにprocess()中で呼ばれる関数は定義されているのでprocess()の後に定義でもオッケー
 print()
-print("***** ホップ回転数 画像解析による回転数測定 *******************")
+print()
+print("*********************************************************")
+print("* ホップ回転数測定                                      *")
+print("*       Open CV による画像解析                          *")
+print("*********************************************************")
+
+print()
+
 root = './bbpict'
 rootFiles = os.listdir(path = root)
 rootFiles.remove('.DS_Store')
@@ -1235,17 +1242,24 @@ with open(csvFileName, 'w', encoding="utf-8") as fCsv:     #'w'->上書き
     writer.writerow(['', '°', 'm/sec', 'usec', 'rps', ''])
 
 ### メインループ ########################################################
-for f in files:
+for i, f in enumerate(files):
     openFileName = os.path.join(root, f)
     print()
+    print('-------------------------------------------------------------------------------------------------------')
+    print()
+    print(f' {i + 1:3d} 枚目 / {len(files):3d} 枚')
     print()
     print('filename = ', openFileName)
     resImg, incAngle, v0, dt, bbRot, statusE  = process(openFileName, '360standard')
     if statusE =='180redo':
         #広範囲角度解析で不具合が出ている時-180〜180度でやり直し
+        print()
+        print('----- 再計算1回目 角度制限-180〜180° --------------------------------------------')
         resImg, incAngle, v0, dt, bbRot, statusE  = process(openFileName, '180redo')
         if statusE =='90redo':
-            #広範囲角度解析で不具合が出ている時-180〜180度でやり直し
+            print()
+            print('----- 再計算2回目 角度制限-90〜90° ----------------------------------------------')
+            #広範囲角度解析で不具合が出ている時-90〜90度でやり直し
             resImg, incAngle, v0, dt, bbRot, statusE  = process(openFileName, '90redo') ##すこしは救われるみたい。低回転側は無理な感じ
 
     ##画像をセーブ
@@ -1271,8 +1285,13 @@ for f in files:
     ##################
     #input('Returnキーを押す -> 次の画像へ')    ##自動処理
 
+print()
+print("-----------------------------------------------------------------------------------------------")
+print("解析画像を.JPGファイルにセーブしました。")
+print("回転アニメを.gifァイルにセーブしました。")
+print("測定データ一覧表を.csvファイルにセーブしました。")
 print('Complete')
 print()
-input('Push any key -> exit system')
+input('Push any key -> exit system ')
 sys.exit()
 
