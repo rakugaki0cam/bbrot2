@@ -23,6 +23,7 @@ import math
 #from webbrowser import BackgroundBrowser
 import csv
 import cv2
+
 import pyocr
 import pyocr.builders
 #import datetime
@@ -191,7 +192,7 @@ def process(filename, mode):
 
     imageNum = os.path.splitext(os.path.basename(filename))[0]    #拡張子無しファイルネームを切り出し
     #pillow画像からGIFファイルにしてセーブ
-    gifImages[0].save('gif'+imageNum+'.gif', save_all=True, append_images=gifImages[1:], optimize=False, duration=100, loop=0)    
+    gifImages[0].save(resultdir+'gif'+imageNum+'.gif', save_all=True, append_images=gifImages[1:], optimize=False, duration=100, loop=0)    
 
    #BB回転アニメーション
     for im in cv2Image:
@@ -1209,6 +1210,7 @@ print("*********************************************************")
 print()
 
 root = './bbpict'
+resultdir = './bbresult/'
 rootFiles = os.listdir(path = root)
 rootFiles.remove('.DS_Store')
 files = []
@@ -1224,7 +1226,7 @@ if len(files) == 0:
 
 startImgFileName = os.path.splitext(os.path.basename(files[0]))[0]    #拡張子無しファイルネーム
 endImgFileName = os.path.splitext(os.path.basename(files[-1]))[0]
-csvFileName = 'result'+startImgFileName+'-'+endImgFileName+'_hoprot.csv'
+csvFileName = resultdir+'result'+startImgFileName+'-'+endImgFileName+'_hoprot.csv'
 
 print(f"画像 {startImgFileName} - {endImgFileName}  {len(files):3d}枚")
 
@@ -1264,7 +1266,7 @@ for i, f in enumerate(files):
             resImg, incAngle, v0, dt, bbRot, statusE  = process(openFileName, '90redo') ##すこしは救われるみたい。低回転側は無理な感じ
 
     ##画像をセーブ
-    savedFileName = "result" + f
+    savedFileName = resultdir+"result"+f
     cv2.imwrite(savedFileName, resImg)
 
     ##測定値をcsvでセーブ
