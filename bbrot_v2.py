@@ -13,7 +13,8 @@
 #   2023.05.08  bbpictディレクトリ内の画像ファイル読込の際、子ディレクトリを除外しエラー回避
 #   2023.05.08  読み取りエラーの時、解析角度範囲を狭めてやり直し...少しは救われるデータあり。時間かかる以外悪くなるところはないので採用
 #   2023.05.09  BB弾回転アニメ.gifファイルを出力 
-#   2023.07.23  python3.11だとエラーになる。3.10.9でOK 
+#   2023.07.23  python3.11だとエラーになる。3.10.9でOK
+#   2023.10.17  gifのdurationをdtに比例させ1/600スロー再生になるようにした。
 #
 
 #ライブラリの読み込み
@@ -189,12 +190,9 @@ def process(filename, mode):
 
         imgPillow = Image.fromarray(imgCrop)    #pillow用画像に変換
         gifImages.append(imgPillow)             #gif image
-
-    imageNum = os.path.splitext(os.path.basename(filename))[0]    #拡張子無しファイルネームを切り出し
-    #pillow画像からGIFファイルにしてセーブ
-    gifImages[0].save(resultdir+'gif'+imageNum+'.gif', save_all=True, append_images=gifImages[1:], optimize=False, duration=100, loop=0)    
-
-   #BB回転アニメーション
+    # セーブは発光間隔dtをOCRで取得後
+    
+   #BB回転アニメーション...GIF
     for im in cv2Image:
         winShow(im, 'gif', (240, 200), (100, 100))
         cv2.waitKey(100)
@@ -256,6 +254,14 @@ def process(filename, mode):
     cv2.imshow('scaled', scaled)
     cv2.imshow('median', median)
     cv2.waitKey(1)
+
+    # GIF セーブ
+    # pillow画像からGIFファイルにしてセーブ　（ストロボ発光間隔dtをOCRで取得後にセーブ）
+    slowRate = 600                      #1/600スロー再生
+    gifDtMsec = dt * slowRate / 1000    #gifの周期時間msec　dtはusec
+    imageNum = os.path.splitext(os.path.basename(filename))[0]    #拡張子無しファイルネームを切り出し
+    gifImages[0].save(resultdir+'gif'+imageNum+'.gif', save_all=True, append_images=gifImages[1:], optimize=False, duration=gifDtMsec, loop=0)    
+
 
 
 ################　回転マッチング　############################
