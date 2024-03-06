@@ -1,7 +1,7 @@
 {
     "python.linting.pylintEnabled": true,
     "python.languageServer": "Default", //追加？？効かない
-    "python.linting.enabled": true,
+    //"python.linting.enabled": true,
     "python.linting.pylintArgs": [
         "--extension-pkg-whitelist = cv2"
     ],
