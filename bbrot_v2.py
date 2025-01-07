@@ -1,4 +1,4 @@
-#   bbrot.py
+﻿#   bbrot.py
 #                   v2
 #
 #   2022.07.09
@@ -112,9 +112,9 @@ def process(filename, mode):
     #ヒストグラム
     histG = False  #True
     if histG is True:
-        hist1 = cv2.calcHist(flip, channels = [0], mask = None, histSize = [256], ranges = [0,256])
-        hist2 = cv2.calcHist(scaled, channels = [0], mask = None, histSize = [256], ranges = [0,256])
-        hist3 = cv2.calcHist(cl1, channels = [0], mask = None, histSize = [256], ranges = [0,256])
+        hist1 = cv2.calcHist([flip], channels = [0], mask = None, histSize = [256], ranges = [0,256])
+        hist2 = cv2.calcHist([scaled], channels = [0], mask = None, histSize = [256], ranges = [0,256])
+        hist3 = cv2.calcHist([cl1], channels = [0], mask = None, histSize = [256], ranges = [0,256])
         plt.plot(hist1)  #ヒストグラム
         plt.plot(hist2)  #ヒストグラム
         plt.plot(hist3)  #ヒストグラム
@@ -349,7 +349,7 @@ def process(filename, mode):
         dl = (math.cos(matchRad) * lineLen, -math.sin(matchRad) * lineLen)
         pt1 = np.add     (point, dl).astype(np.int16)
         pt2 = np.subtract(point, dl).astype(np.int16)
-        cv2.line(bbImg, pt1, pt2, mazenta, thickness = 1)
+        cv2.line(bbImg, pt1, pt2, color = mazenta, thickness = 1)
 
         #角度の書き込み
         wholeAngle = matchAngle - firstAngle
@@ -832,10 +832,10 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
             if denomi <= 2:
                 #細かく計算する時は表示しない
                 #角度表示
-                cv2.putText(tp, str(matchAngle), org = (0, 15), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
+                cv2.putText(tp, str(matchAngle), org = (0, 15), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = (0, 0, 0), thickness = 1)
                 # org は左下の座標
                 #マッチ値表示
-                cv2.putText(tp, str(int(max9)), org = (0, 100), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = 0, thickness = 1)
+                cv2.putText(tp, str(int(max9)), org = (0, 100), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = (0, 0, 0), thickness = 1)
                 topLeft = maxLoc
                 bottomRight = (topLeft[0] + w, topLeft[1] + h)
                 cv2.rectangle(cr2, topLeft, bottomRight, (255, 0, 255), 1)
@@ -1171,7 +1171,7 @@ def mask_circle(image, dia):
     #白い画像の中心に黒い円を描画する。
     centerX = image.shape[1] // 2
     centerY = image.shape[0] // 2
-    cv2.circle(mask, (centerX, centerY), (dia // 2), color = 0, thickness = - 1)
+    cv2.circle(mask, (centerX, centerY), (dia // 2), color = (0,0,0), thickness = - 1)
     #cv2.imshow('TMask', mask)
     #cv2.waitKey(0)
     return cv2.bitwise_or(image, mask)
