@@ -5,6 +5,6 @@
     //"python.linting.pylintArgs": [
     //    "--extension-pkg-whitelist = cv2"
     //],
-    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.typeCheckingMode": "basic"
 }
 

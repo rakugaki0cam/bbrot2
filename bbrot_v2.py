@@ -346,7 +346,7 @@ def process(filename, mode):
         #回転角度の線を表示
         lineLen = 160 // 2
         matchRad = math.radians(matchAngle)
-        dl = (math.cos(matchRad) * lineLen, -math.sin(matchRad) * lineLen)
+        dl = (math.cos(matchRad) * lineLen, - math.sin(matchRad) * lineLen)
         pt1 = np.add     (point, dl).astype(np.int16)
         pt2 = np.subtract(point, dl).astype(np.int16)
         cv2.line(bbImg, pt1, pt2, color = mazenta, thickness = 1)
@@ -509,13 +509,14 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
 
     #円を描写
     for c in circles:
+    #for c in circles[0, :]:
         # 円周を描画する
         cv2.circle(image, (c[0], c[1]), c[2], green, thickness = 1)
         # 中心点を描画する
         cv2.drawMarker(image, (c[0], c[1]), darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
 
     #x位置順にソート
-    circles = sorted(circles, key=lambda x: x[0])    #x[0]:x座標
+    circles = sorted(circles, key=lambda x: x[0])   #x[0]:x座標 で並べ替えて新たな変数へ代入
     #BBデータを整理
     bbData = []        #(n, x, y, r)
     bbnum = 0
