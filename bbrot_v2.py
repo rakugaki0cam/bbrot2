@@ -137,12 +137,12 @@ def process(filename, mode):
     if bbData is None:
         statusE = '円検出できず'
         print(statusE)
-        winShow(bbImg, filename + detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
+        winShow(bbImg, detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
         cv2.waitKey(1)
         return bbImg, 0, 0, 0, 0, statusE
 
 
-    winShow(bbImg, filename + detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
+    winShow(bbImg, detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
     cv2.waitKey(1)
 
     bbCount = len(bbData)
@@ -1047,7 +1047,7 @@ def ocrLcd(image):
     for t in txt:
         #print('[ "' + t.content + '"', end = ' ')       # debug
         #print(t.position, "]")                          # debug
-        cv2.rectangle(out, t.position[0], t.position[1],(255, 0, 255), 2)
+        cv2.rectangle(out, t.position[0], t.position[1], (255, 0, 255), 2)
 
     cv2.imshow('lcdImage', out)
     cv2.waitKey(1)
