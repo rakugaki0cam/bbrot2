@@ -51,15 +51,17 @@ winX3 = 0
 winY3 = 400
 #
 cv2.namedWindow('matchBB', cv2.WINDOW_NORMAL)
+cv2.namedWindow('Hough', cv2.WINDOW_NORMAL)
 cv2.namedWindow('flip', cv2.WINDOW_NORMAL)
 cv2.namedWindow('scaled', cv2.WINDOW_NORMAL)
 cv2.namedWindow('median', cv2.WINDOW_NORMAL)
 cv2.namedWindow('threshold', cv2.WINDOW_NORMAL )
 cv2.namedWindow('CLAHE', cv2.WINDOW_NORMAL)
 
-cv2.moveWindow('matchBB' , winX0, winY1)
+cv2.moveWindow('matchBB', winX0, winY1)
 cv2.resizeWindow('matchBB', 150, 150) 
 
+cv2.moveWindow('Hough'    , winX2, winY1)
 cv2.moveWindow('flip'     , winX2, winY1 + winH2*1)
 cv2.moveWindow('scaled'   , winX2, winY1 + winH2*2)
 cv2.moveWindow('median'   , winX2, winY1 + winH2*3)
@@ -153,18 +155,19 @@ def process(filename, mode):
     ######################### 検出方法を選択 #####################################################
     flipBGR = cv2.cvtColor(flip.copy(), cv2.COLOR_GRAY2BGR)   #イメージ出力の元画像
 
-    detectMethod = "Hough"  # Hough円検出による
+    # Hough円検出による
     bbImg, bbData = circlesHough(flipBGR, median, bbPixelMin, bbPixelMax) #　ハフ円検出
 
     if bbData is None:
         statusE = '円検出できず'
         print(statusE)
-        winShow(bbImg, detectMethod, (winX2, winY1), winquarter)
+        cv2.imshow('Hough', bbImg)
+        cv2.resizeWindow('Hough', winquarter)
         cv2.waitKey(1)
         return bbImg, 0, 0, 0, 0, statusE
 
-
-    winShow(bbImg, detectMethod, (winX2, winY1), winquarter)
+    cv2.imshow('Hough', bbImg)
+    cv2.resizeWindow('Hough', winquarter)
     cv2.waitKey(1)
 
     bbCount = len(bbData)
@@ -269,7 +272,7 @@ def process(filename, mode):
     print(f'  初速v0 = {v0:6.2f}m/sec')             #初速
 
     #画像へコマ周期、初速、ファイル名を書き込み
-    text = f"{detectMethod} circles:{bbCount:2d}  v0:{v0:6.2f}m/sec  dt:{dt:6.2f}usec  incline:{incAngle:6.3f}deg  ({filename})"
+    text = f"Hough circles:{bbCount:2d}  v0:{v0:6.2f}m/sec  dt:{dt:6.2f}usec  incline:{incAngle:6.3f}deg  ({filename})"
     locate = (int(bbData[0][1]), int(bbData[0][2] + 100))
     cv2.putText(bbImg, text, locate, cv2.FONT_HERSHEY_SIMPLEX, 0.8, white, 1)
 
