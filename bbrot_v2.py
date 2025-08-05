@@ -127,12 +127,12 @@ def process(filename, mode):
 
     #detectMethod = "Blobs" #少し小さくなるようだ。検出できないことも多い。
     detectMethod = "Hough"
-    if detectMethod == 'Blobs':
-        #Blob円検出による
-        bbImg, bbData = circlesBlobs(flipBGR, threshold, minGray, maxGray, bbPixelMin, bbPixelMax) #　ブロブ円検出
-    else:
+    #if detectMethod == 'Blobs':
+    #    #Blob円検出による
+    #    bbImg, bbData = circlesBlobs(flipBGR, threshold, minGray, maxGray, bbPixelMin, bbPixelMax) #　ブロブ円検出
+    #else:
         #Hough円検出による
-        bbImg, bbData = circlesHough(flipBGR, median, bbPixelMin, bbPixelMax) #　ハフ円検出
+    bbImg, bbData = circlesHough(flipBGR, median, bbPixelMin, bbPixelMax) #　ハフ円検出
 
     if bbData is None:
         statusE = '円検出できず'
@@ -505,23 +505,21 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
         return image, bbData
 
     #型変換
-    circles = np.uint16(np.around(circles))
-    circles = np.squeeze(circles)       #[]をひとつ削除する（サイズが1の次元が全て削除される　(1,16,3)->(16,3)　　）
+    circles = np.round(circles[0, :]).astype('int16')
 
     #円を描写
-    for c in circles:
-    #for c in circles[0, :]:
+    for (x, y, r) in circles:
         # 円周を描画する
-        cv2.circle(image, (c[0], c[1]), c[2], green, thickness = 1)
+        cv2.circle(image, (x, y), r, green, thickness = 1)
         # 中心点を描画する
-        cv2.drawMarker(image, (c[0], c[1]), darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
+        cv2.drawMarker(image, (x, y), darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
 
     #x位置順にソート
-    circles = sorted(circles, key=lambda x: x[0])   #x[0]:x座標 で並べ替えて新たな変数へ代入
+    sortedCircles = sorted(circles, key=lambda x: x[0])   #x[0]:x座標 で並べ替えて新たな変数へ代入
     #BBデータを整理
     bbData = []        #(n, x, y, r)
     bbnum = 0
-    for c in circles:
+    for c in sortedCircles:
         bbData.append([bbnum, c[0], c[1], c[2]])
         bbnum += 1
 
@@ -532,7 +530,7 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
     return image, bbData
 
 
-
+'''
 def circlesBlobs(image, threshold, minGray, maxGray, bbPixelMin, bbPixelMax):
     """
     ブロブ円でBB弾を検出
@@ -637,6 +635,7 @@ def blobsDetect(image, minGray, maxGray, bbPixelMin, bbPixelMax):
     #検出器を作動（ブロブを検出する）
     keypoints = detector.detect(image)
     return keypoints
+'''
 
 
 ###### データ整形関数　#################
@@ -822,6 +821,7 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
     matchAngle = 0
     for i in range(startAngle * denomi, endAngle * denomi):
         angle = i / denomi
+        
         tp = rot(template, angle)
         matchResult = cv2.matchTemplate(cr, tp, cv2.TM_CCOEFF)
         _, maxVal, _, maxLoc = cv2.minMaxLoc(matchResult)   ###minVal,maxVal,minIndex,maxIndex
@@ -854,6 +854,7 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
     return matchAngle, max9
 
 
+'''
 def contourMatch(image, template, pt, size):
     """
     特徴点検出にて角度を求める
@@ -938,7 +939,7 @@ def match(img1, img2):
 
 
     return img3, (kp1, des1, kp2, des2, matches)
-
+'''
 
 
 
@@ -1142,7 +1143,7 @@ def rot(image, degree):
     if len(image.shape):
         #gray scale
         (h, w) = image.shape
-        bg = 255
+        bg = (255, 255, 255)  # bg = 255
     else:
         #color
         (h, w) = image.shape[:2]
