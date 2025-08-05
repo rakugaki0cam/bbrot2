@@ -36,10 +36,35 @@ from PIL import Image
 sys.path.append('/path/to/dir')
 
 #ウインドウの設定
-cv2.namedWindow('template3', cv2.WINDOW_NORMAL)
-cv2.moveWindow('template3', 200, 200)
-cv2.namedWindow('match BB', cv2.WINDOW_NORMAL)
-cv2.moveWindow('match BB', 0, 200)
+#BB image window
+winX0 = 0
+winY0 = 0
+#matchBB window
+winX1 = 200
+winY1 = 200
+#TAMA window
+winX2 = 400
+winY2 = 200
+winH2 = 140
+#OCR window
+winX3 = 0
+winY3 = 400
+#
+cv2.namedWindow('matchBB', cv2.WINDOW_NORMAL)
+cv2.namedWindow('flip', cv2.WINDOW_NORMAL)
+cv2.namedWindow('scaled', cv2.WINDOW_NORMAL)
+cv2.namedWindow('median', cv2.WINDOW_NORMAL)
+cv2.namedWindow('threshold', cv2.WINDOW_NORMAL )
+cv2.namedWindow('CLAHE', cv2.WINDOW_NORMAL)
+
+cv2.moveWindow('matchBB' , winX0, winY1)
+cv2.resizeWindow('matchBB', 150, 150) 
+
+cv2.moveWindow('flip'     , winX2, winY1 + winH2*1)
+cv2.moveWindow('scaled'   , winX2, winY1 + winH2*2)
+cv2.moveWindow('median'   , winX2, winY1 + winH2*3)
+cv2.moveWindow('threshold', winX2, winY1 + winH2*4)
+cv2.moveWindow('CLAHE'    , winX2, winY1 + winH2*5)
 
 #色の定義
 mazenta = (255, 0, 255)
@@ -81,7 +106,7 @@ def process(filename, mode):
     #グレースケール化(OCRで使用)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     #高さを中央付近450pxにクロップ
-    w = image.shape[1]          #GX8:5184, GX7:4592
+    w = image.shape[1]          #LUMIX GX8:5184, LUMIX GX7:4592
     h = int(image.shape[0] * 0.116) # GX8:3888, GX7:3448 -> 450pixel切り取り画像の縦ピクセル数 ### 2022/10/10 撮影高さ失敗600にて可
     top = (image.shape[0] - h) // 2
     flip = image[top: top + h, 0: w]
@@ -101,15 +126,18 @@ def process(filename, mode):
     minGray, threshold = cv2.threshold(median, minGray, maxGray, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
     #各処理画像の表示
-    hw = 350    #ディスプレイ上の表示座標y
-    hwd = 140
-    winShow(flip, 'flip', (700, hw), (w // 4, h // 4))  #1/4に縮小
-    winShow(scaled, 'scaled', (700, hw + hwd), (w // 4, h // 4))
-    winShow(median, 'median', (700, hw + hwd + hwd), (w // 4, h // 4))
-    winShow(threshold, 'threshold', (700, hw + hwd + hwd + hwd), (w // 4, h // 4))
-    winShow(cl1, 'CLAHE', (700, hw + hwd + hwd + hwd + hwd), (w // 4, h // 4))
-    #print('ブロブ検出用二値化　大津の閾値 = ',minGray)
-
+    winquarter = (w // 4, h // 4) #1/4に縮小
+    cv2.imshow('flip', flip)
+    cv2.imshow('scaled', scaled)
+    cv2.imshow('median', median)
+    cv2.imshow('threshold', threshold)
+    cv2.imshow('CLAHE', cl1)
+    cv2.resizeWindow('flip', winquarter)
+    cv2.resizeWindow('scaled', winquarter)
+    cv2.resizeWindow('median', winquarter)
+    cv2.resizeWindow('threshold', winquarter)
+    cv2.resizeWindow('CLAHE', winquarter)
+    
     #ヒストグラム
     histG = False  #True
     if histG is True:
@@ -125,24 +153,18 @@ def process(filename, mode):
     ######################### 検出方法を選択 #####################################################
     flipBGR = cv2.cvtColor(flip.copy(), cv2.COLOR_GRAY2BGR)   #イメージ出力の元画像
 
-    #detectMethod = "Blobs" #少し小さくなるようだ。検出できないことも多い。
-    detectMethod = "Hough"
-    #if detectMethod == 'Blobs':
-    #    #Blob円検出による
-    #    bbImg, bbData = circlesBlobs(flipBGR, threshold, minGray, maxGray, bbPixelMin, bbPixelMax) #　ブロブ円検出
-    #else:
-        #Hough円検出による
+    detectMethod = "Hough"  # Hough円検出による
     bbImg, bbData = circlesHough(flipBGR, median, bbPixelMin, bbPixelMax) #　ハフ円検出
 
     if bbData is None:
         statusE = '円検出できず'
         print(statusE)
-        winShow(bbImg, detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
+        winShow(bbImg, detectMethod, (winX2, winY1), winquarter)
         cv2.waitKey(1)
         return bbImg, 0, 0, 0, 0, statusE
 
 
-    winShow(bbImg, detectMethod, (700, 190), (w // 4, h // 4))  #1/4に縮小
+    winShow(bbImg, detectMethod, (winX2, winY1), winquarter)
     cv2.waitKey(1)
 
     bbCount = len(bbData)
@@ -530,114 +552,6 @@ def circlesHough(image, median, bbPixelMin, bbPixelMax):
     return image, bbData
 
 
-'''
-def circlesBlobs(image, threshold, minGray, maxGray, bbPixelMin, bbPixelMax):
-    """
-    ブロブ円でBB弾を検出
-
-    Parameters
-    ----------
-    image : mat
-        出力画像の元
-    threshold : mat
-        検出する画像
-    minGray : int
-    maxGray : int
-        二値化の閾値 0 ~ 255
-    bbPixelMin : int
-    bbPixelMax : int
-        BB弾の大きさ px
-    
-    Returns
-    -------
-        円検出画像
-        円位置座標とサイズ
-    """
-    #ブロブ円検出
-    keypoints = blobsDetect(threshold, minGray, maxGray, bbPixelMin, bbPixelMax)
-    if len(keypoints) == 0:
-        #検出ゼロのとき
-        bbData = None
-        return image, bbData
-
-    #ブロブを円形で表示
-    image = cv2.drawKeypoints(image, keypoints, image, green, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-    #x位置順にソート
-    keypoints = sorted(keypoints, key=lambda kp: kp.pt[0])    #kp.pt[0]:x座標
-    #BBデータを整理
-    bbData = []        #(n, x, y, r)
-    bbnum = 0
-    for k in keypoints:
-        point = (int(k.pt[0]), int(k.pt[1]))
-        #ブロブの中心を表示
-        cv2.drawMarker(image, point, darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
-        bbData.append([bbnum, point[0], point[1], int(k.size / 2)])
-        bbnum += 1
-
-    #ブロブの個数
-    #bbcount = len(bbData)
-    #print(f'blob circles: {bbcount}')
-    #print(bbData)
-    return  image, bbData
-
-
-def blobsDetect(image, minGray, maxGray, bbPixelMin, bbPixelMax):
-    """
-    ブロブ（かたまり）検出器を設定して検出
-
-    Parameters
-    ----------
-    image : mat
-        検出対象の画像
-    minGray : int
-    maxGray : int
-        二値化の閾値 0 ~ 255
-    bbPixelMin : int
-    bbPixelMax : int
-        BB弾の大きさ px
-    
-    Returns
-    -------
-        ブロブ位置座標とサイズ
-    """
-
-    #ブロブ（塊）検出器の設定
-    params = cv2.SimpleBlobDetector_Params()
-    #白のブロブを検出
-    params.blobColor = 255      #黒検出したい時は0
-     #閾値
-    params.minThreshold = minGray
-    params.maxThreshold = maxGray
-    #塊の大きさ（面積）
-    params.filterByArea = True
-    shade = 0.95      #影、インク模様の面積分の補正
-    params.minArea = bbPixelMin ** 2 * math.pi / 4 * shade      ##小さい円が入りすぎ＃＃＃＃＃＃＃＃＃＃＃
-    params.maxArea = bbPixelMax ** 2 * math.pi / 4
-    #円形度でフィルタ(凹面concave)
-    params.filterByCircularity = True
-    params.minCircularity = 0.4   #0〜1 = 4πS/L^2   S:面積(画素数) L:周囲長　　　円形度が高い->1.0
-    ###模様が外周にかかって輪郭が切れた時に凹面になるので小さめの値にする
-    #凸面フィルタ
-    params.filterByConvexity = True
-    params.minConvexity = 0.5       #0〜1 = S/C  S:面積　C:凸面の面積（円形から出っぱった分）
-    #楕円形フィルタ（形態の伸び　円形=1、直線=0 慣性モーメント）
-    params.filterByInertia = True
-    params.minInertiaRatio = 0.5
-    #検出器を設定
-    ver = (cv2.__version__).split('.')
-    if int(ver[0]) <= 2:
-        #openCV ver.2
-        detector = cv2.SimpleBlobDetector(params)
-    else:
-        #openCV ver.3~
-        detector = cv2.SimpleBlobDetector_create(params)
-
-    #検出器を作動（ブロブを検出する）
-    keypoints = detector.detect(image)
-    return keypoints
-'''
-
-
 ###### データ整形関数　#################
 
 def excludeSmall(bbData):
@@ -795,26 +709,8 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
     k = 0.94    #縁が出ないように ##################2022.08.19
     cr = mask_circle(cr, int(size * k))
 
-    cv2.imshow("match BB", cr)
+    cv2.imshow('matchBB', cr)
     (w, h) = template.shape[: : -1]
-
-    #### whole test #####
-    # img2 = image.copy()
-    # matchResult = cv2.matchTemplate(img2, template, cv2.TM_CCOEFF)
-    # _, maxVal, _, maxLoc = cv2.minMaxLoc(matchResult)   ###minVal,maxVal,minIndex,maxIndex
-    # topLeft = maxLoc
-    # bottomRight = (topLeft[0] + w, topLeft[1] + h)
-    # cv2.rectangle(img2, topLeft, bottomRight, (255, 0, 255), 3)
-    # マッチリザルト
-    # plt.subplot(121),plt.imshow(matchResult, cmap = 'gray')
-    # plt.title('Matching Result'), plt.xticks([]), plt.yticks([])
-    # plt.subplot(122),plt.imshow(img2, cmap = 'gray')
-    # plt.title('Detected Point'), plt.xticks([]), plt.yticks([])
-    # plt.show()
-    # うまくいかない
-    #
-    #######################
-
 
     # ぐるぐる回しながら相関が最大となる角度を求める
     denomi = 10      #角度計算のステップ　1度/denomi  2->0.5deg 10->0.1deg
@@ -842,7 +738,7 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
                 bottomRight = (topLeft[0] + w, topLeft[1] + h)
                 cv2.rectangle(cr2, topLeft, bottomRight, (255, 0, 255), 1)
 
-                cv2.imshow("match BB", cr2)
+                cv2.imshow('matchBB', cr2)
                 cv2.imshow("template3", tp)
                 cv2.waitKey(1)
 
@@ -852,95 +748,6 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
                 #plt.show()
 
     return matchAngle, max9
-
-
-'''
-def contourMatch(image, template, pt, size):
-    """
-    特徴点検出にて角度を求める
-
-    Parameters
-    ----------
-    image : mat
-        BB弾列の画像
-    template : mat
-        テンプレート画像
-    pt : [number, number]
-        推定対象の中心位置[col,row]
-    size : any
-        比較するBB画像の直径 px
-
-    Returns
-    -------
-    マッチング角度 -180~+180(deg)#####################
-    """
-
-    ext = 200    #周りを少し広く
-    cr = crop(image, pt, (size + ext, size + ext ))
-    #ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-    #ret, cr = cv2.threshold(cr, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-
-    #cv2.imshow("match BB2", template)
-    match(template, cr)
-    return
-
-
-def match(img1, img2):
-    # 特徴点抽出
-    det = cv2.ORB_create()#ORB
-    # 各画像の特徴点を取る
-    kp1, des1 = det.detectAndCompute(img1, None)
-    kp2, des2 = det.detectAndCompute(img2, None)
-
-    # 2つの特徴点をマッチさせる
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING)#, crossCheck = True)
-    #matches = bf.match(des1, des2)
-    matches = bf.knnMatch(des1, des2, k = 2)
-
-    # レシオテストを行う
-    th = 0.85 #0.60
-    good = []
-    for m, n in matches:
-        if m.distance < n.distance * th:
-            good.append([m])
-
-    # 特徴点を同士をつなぐ
-    img3 = cv2.drawMatchesKnn(img1, kp1, img2, kp2, good, img1.copy())
-    #cv2.imshow('keypoint match', img3)
-    #cv2.waitKey(0)
-
-    #変数の形を合わせる　＝　配列の次元と数を揃える
-    nu = len(good)
-    fromKp = []
-    for k in kp1[:nu]:
-        fromKp.append([k.pt[0],k.pt[1]])
-    fromKp = np.reshape(fromKp, (-1, 1, 2))
-
-    toKp = []
-    for k in kp2[:nu]:
-        toKp.append([k.pt[0],k.pt[1]])
-    toKp   = np.reshape(toKp, (-1, 1, 2))
-
-    aA, _ = cv2.estimateAffinePartial2D(fromKp, toKp)     #2つの変数の数が合わないとダメなよう
-
-    #平行移動量
-    # mM = aA[:2, :2]
-    # t = aA[:, 2]
-    # print(' M', mM, 't', t)
-    # #回転角度
-    degree = np.rad2deg(-np.arctan2(aA[0, 1], aA[0, 0]))
-    print('特徴点 回転角度＝' , degree)
-
-    textDa = 'f{degree:6.2f}deg'
-    cv2.putText(img3, textDa, org = (160, 250), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1.0, color = white, thickness = 1)
-
-    cv2.imshow('keypoint match', img3)
-    cv2.waitKey(1)
-
-
-    return img3, (kp1, des1, kp2, des2, matches)
-'''
-
 
 
 ##### OCR ##########################################################################
@@ -1024,7 +831,7 @@ def ocrLcd(image):
     rLcdImage = cv2.resize(lcdImage, (w // 2, h // 2))
 
     cv2.imshow("lcdImage", rLcdImage)
-    cv2.moveWindow("lcdImage", 0, 500)
+    cv2.moveWindow("lcdImage", winX3, winY3)
 
     #cv2.imwrite("test.png",lcdImage)
     cv2.waitKey(1)
