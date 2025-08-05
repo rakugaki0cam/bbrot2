@@ -350,7 +350,7 @@ def process(filename, mode):
         dl = (math.cos(matchRad) * lineLen, - math.sin(matchRad) * lineLen)
         pt1 = np.add     (point, dl).astype(np.int16)
         pt2 = np.subtract(point, dl).astype(np.int16)
-        cv2.line(bbImg, pt1, pt2, color = mazenta, thickness = 1)
+        cv2.line(bbImg, tuple(pt1), tuple(pt2), color = mazenta, thickness = 1, lineType = cv2.LINE_AA, shift = 0)  
 
         #角度の書き込み
         wholeAngle = matchAngle - firstAngle
@@ -563,7 +563,7 @@ def circlesBlobs(image, threshold, minGray, maxGray, bbPixelMin, bbPixelMax):
         return image, bbData
 
     #ブロブを円形で表示
-    image = cv2.drawKeypoints(image, keypoints, None, green, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    image = cv2.drawKeypoints(image, keypoints, image, green, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     #x位置順にソート
     keypoints = sorted(keypoints, key=lambda kp: kp.pt[0])    #kp.pt[0]:x座標
     #BBデータを整理
@@ -904,7 +904,7 @@ def match(img1, img2):
             good.append([m])
 
     # 特徴点を同士をつなぐ
-    img3 = cv2.drawMatchesKnn(img1, kp1, img2, kp2, good, None)
+    img3 = cv2.drawMatchesKnn(img1, kp1, img2, kp2, good, img1.copy())
     #cv2.imshow('keypoint match', img3)
     #cv2.waitKey(0)
 
@@ -997,7 +997,7 @@ def ocrLcd(image):
         ret, lcdImage = cv2.threshold(lcdImage, ret + 35, 255,cv2.THRESH_BINARY)
         #retはOTSUのときのしきい値
         kernel = np.ones((3,3),np.uint8)
-        lcdImage = cv2.erode(lcdImage, kernel, 4)
+        lcdImage = cv2.erode(lcdImage, kernel)
 
     #表示LCD(deBUGger)の回転
     if ocrType == 0:
