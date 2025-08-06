@@ -85,6 +85,7 @@ green   = (0, 255, 0)
 darkGreen = (0, 127, 0)
 white   = (255, 255, 255)
 
+
 def process(filename, mode):
     """
     写っているすべてのBB弾の角度を推定
@@ -161,10 +162,7 @@ def process(filename, mode):
         plt.plot(hist3)  #ヒストグラム
         plt.show()
 
-
-    ######################### 検出方法を選択 #####################################################
     flipBGR = cv2.cvtColor(flip.copy(), cv2.COLOR_GRAY2BGR)   #イメージ出力の元画像
-
     # Hough円検出による
     bbImg, bbData = circlesHough(flipBGR, median, bbPixelMin, bbPixelMax) #　ハフ円検出
 
@@ -240,11 +238,8 @@ def process(filename, mode):
         cv2.drawMarker(bbImg, (b[1], b[2]), darkGreen, markerType = cv2.MARKER_CROSS, markerSize = 300, thickness = 1)
     cv2.waitKey(1)
 
-
-
     #### OCR ########################################################
     txtDt, txtV0 = ocrLcd(image)
-
     #Δ時間の読み取り値が数値変換時にエラーの時（　.がコンマだったり、数字じゃなかったり）
     try:
         dt = float(txtDt)
@@ -299,10 +294,7 @@ def process(filename, mode):
     imageNum = os.path.splitext(os.path.basename(filename))[0]    #拡張子無しファイルネームを切り出し
     gifImages[0].save(resultdir+'gif'+imageNum+'.gif', save_all=True, append_images=gifImages[1:], optimize=False, duration=gifDtMsec, loop=0)    
 
-
-
 ################　回転マッチング　############################
-
     #カメラ撮影光軸中心付近のBB弾をテンプレートとする
     indexCenter = bbCount // 2    #//の答えは整数となる 標準条件で7となる
     #標準条件: ストロボ発光間隔　初速12mm距離の時間、発光回数　15回
