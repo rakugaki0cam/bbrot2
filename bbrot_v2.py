@@ -48,9 +48,17 @@ winY2 = 200
 winH2 = 140
 #OCR window
 winX3 = 0
-winY3 = 400
+winY3 = 560
+#gif
+winX4 = 30
+winY4 = 400
+#template
+winX5 = 200
+winY5 = 200
 #
 cv2.namedWindow('matchBB', cv2.WINDOW_NORMAL)
+cv2.namedWindow('gif', cv2.WINDOW_NORMAL)
+cv2.namedWindow('template', cv2.WINDOW_NORMAL)
 cv2.namedWindow('Hough', cv2.WINDOW_NORMAL)
 cv2.namedWindow('flip', cv2.WINDOW_NORMAL)
 cv2.namedWindow('scaled', cv2.WINDOW_NORMAL)
@@ -58,9 +66,9 @@ cv2.namedWindow('median', cv2.WINDOW_NORMAL)
 cv2.namedWindow('threshold', cv2.WINDOW_NORMAL )
 cv2.namedWindow('CLAHE', cv2.WINDOW_NORMAL)
 
-cv2.moveWindow('matchBB', winX0, winY1)
-cv2.resizeWindow('matchBB', 150, 150) 
-
+cv2.moveWindow('matchBB'  , winX0, winY1)
+cv2.moveWindow('gif'      , winX4, winY4)
+cv2.moveWindow('template' , winX5, winY5)
 cv2.moveWindow('Hough'    , winX2, winY1)
 cv2.moveWindow('flip'     , winX2, winY1 + winH2*1)
 cv2.moveWindow('scaled'   , winX2, winY1 + winH2*2)
@@ -69,6 +77,7 @@ cv2.moveWindow('threshold', winX2, winY1 + winH2*4)
 cv2.moveWindow('CLAHE'    , winX2, winY1 + winH2*5)
 
 #色の定義
+black   = (0, 0, 0)
 mazenta = (255, 0, 255)
 yellow  = (0, 255, 255)
 green   = (0, 255, 0)
@@ -220,7 +229,8 @@ def process(filename, mode):
     
    #BB回転アニメーション...GIF
     for im in cv2Image:
-        winShow(im, 'gif', (240, 200), (100, 100))
+        cv2.imshow('gif', im)
+        cv2.resizeWindow('gif', 100, 100)   #縮小表示
         cv2.waitKey(100)
 
     #円周と中心点を描画
@@ -675,9 +685,6 @@ def bbImageCrop(image, bbData):
     return image, top, left
 
 
-
-
-
 ##### テンプレート or 特徴点 マッチング ############################################
 
 def estimateRot(image, template, startAngle, endAngle, pt, size):
@@ -716,7 +723,7 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
     (w, h) = template.shape[: : -1]
 
     # ぐるぐる回しながら相関が最大となる角度を求める
-    denomi = 10      #角度計算のステップ　1度/denomi  2->0.5deg 10->0.1deg
+    denomi = 1      #角度計算のステップ　1度/denomi  2->0.5deg 10->0.1deg-----------
     matchAngle = 0
     for i in range(startAngle * denomi, endAngle * denomi):
         angle = i / denomi
@@ -733,16 +740,17 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
             if denomi <= 2:
                 #細かく計算する時は表示しない
                 #角度表示
-                cv2.putText(tp, str(matchAngle), org = (0, 15), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = (0, 0, 0), thickness = 1)
+                cv2.putText(tp, str(matchAngle)+'deg', org = (10, 15), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = black, thickness = 1)
                 # org は左下の座標
                 #マッチ値表示
-                cv2.putText(tp, str(int(max9)), org = (0, 100), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = (0, 0, 0), thickness = 1)
+                cv2.putText(tp, str(int(max9)), org = (10, 100), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.4, color = black, thickness = 1)
                 topLeft = maxLoc
                 bottomRight = (topLeft[0] + w, topLeft[1] + h)
-                cv2.rectangle(cr2, topLeft, bottomRight, (255, 0, 255), 1)
+                cv2.rectangle(cr2, topLeft, bottomRight, mazenta, 1)
 
                 cv2.imshow('matchBB', cr2)
-                cv2.imshow("template3", tp)
+                #cv2.resizeWindow('matchBB', 150, 150) 
+                cv2.imshow('template', tp)
                 cv2.waitKey(1)
 
                 #マッチ　類似度のヒートマップ
@@ -890,16 +898,6 @@ def ocrLcd(image):
 
 ##### サブ関数　##################################
 
-
-# 画像の表示
-def display(img, output_file_path):
-    cv2.imwrite(output_file_path, img)
-    plt.imshow(plt.imread(output_file_path))
-    plt.axis('off')
-    plt.show()
-
-
-
 def crop(image, pt, size):
     """
     画像の一部を矩形で切り取る
@@ -988,30 +986,6 @@ def mask_circle(image, dia):
     #cv2.imshow('TMask', mask)
     #cv2.waitKey(0)
     return cv2.bitwise_or(image, mask)
-
-
-def winShow(image, name, pt, size):
-    """
-    画像をウインドウで表示
-    Parameters
-    ----------
-    image : mat
-        画像データ
-    name : string
-        ウインドウ名
-    pt : [number, number]
-        ウインドウ表示位置[col, row]pixel
-    size : [number, number]
-        ウインドウに表示する画像サイズ[width, height]pixel
-    Returns
-    -------
-    なし
-    """
-    cv2.namedWindow(name, cv2.WINDOW_NORMAL)
-    cv2.imshow(name, image)
-    cv2.moveWindow(name, pt[0], pt[1])
-    cv2.resizeWindow(name, size[0], size[1])
-    return
 
 
 ########  main  ######################################################################################
