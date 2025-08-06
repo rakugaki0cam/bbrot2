@@ -44,7 +44,7 @@ winY0 = 0
 winX1 = 200
 winY1 = 200
 #TAMA window
-winX2 = 400
+winX2 = 500
 winY2 = 200
 winH2 = 140
 #OCR window
@@ -60,22 +60,18 @@ winY5 = 200
 cv2.namedWindow('matchBB', cv2.WINDOW_NORMAL)
 cv2.namedWindow('gif', cv2.WINDOW_NORMAL)
 cv2.namedWindow('template', cv2.WINDOW_NORMAL)
-cv2.namedWindow('Hough', cv2.WINDOW_NORMAL)
 cv2.namedWindow('flip', cv2.WINDOW_NORMAL)
 cv2.namedWindow('scaled', cv2.WINDOW_NORMAL)
 cv2.namedWindow('median', cv2.WINDOW_NORMAL)
 cv2.namedWindow('threshold', cv2.WINDOW_NORMAL )
-cv2.namedWindow('CLAHE', cv2.WINDOW_NORMAL)
 
 cv2.moveWindow('matchBB'  , winX0, winY1)
 cv2.moveWindow('gif'      , winX4, winY4)
 cv2.moveWindow('template' , winX5, winY5)
-cv2.moveWindow('Hough'    , winX2, winY1)
-cv2.moveWindow('flip'     , winX2, winY1 + winH2*1)
-cv2.moveWindow('scaled'   , winX2, winY1 + winH2*2)
-cv2.moveWindow('median'   , winX2, winY1 + winH2*3)
-cv2.moveWindow('threshold', winX2, winY1 + winH2*4)
-cv2.moveWindow('CLAHE'    , winX2, winY1 + winH2*5)
+cv2.moveWindow('flip'     , winX2, winY1 + winH2*0)
+cv2.moveWindow('scaled'   , winX2, winY1 + winH2*1)
+cv2.moveWindow('median'   , winX2, winY1 + winH2*2)
+cv2.moveWindow('threshold', winX2, winY1 + winH2*3)
 
 #色の定義
 black   = (0, 0, 0)
@@ -129,9 +125,6 @@ def process(filename, mode):
     scaled = cv2.convertScaleAbs(flip, alpha = 3.5, beta = 0)       #alpha:スケールファクタ1.0〜2.0 beta:加算値
     #ノイズ除去してブロブ検出用の画像を作成
     median = cv2.medianBlur(flip, ksize = 9)                        #ksizeは奇数 円の検出大きさに関わってくる
-    #平坦化 （オプション）
-    clahe = cv2.createCLAHE(clipLimit = 2.0, tileGridSize = (8,8))
-    cl1 = clahe.apply(flip)
     #二値化の閾値を求める
     minGray = 0
     maxGray = 255
@@ -144,22 +137,18 @@ def process(filename, mode):
     cv2.imshow('scaled', scaled)
     cv2.imshow('median', median)
     cv2.imshow('threshold', threshold)
-    cv2.imshow('CLAHE', cl1)
     cv2.resizeWindow('flip', winquarter)
     cv2.resizeWindow('scaled', winquarter)
     cv2.resizeWindow('median', winquarter)
     cv2.resizeWindow('threshold', winquarter)
-    cv2.resizeWindow('CLAHE', winquarter)
     
     #ヒストグラム
     histG = False  #True
     if histG is True:
         hist1 = cv2.calcHist([flip], channels = [0], mask = None, histSize = [256], ranges = [0,256])
         hist2 = cv2.calcHist([scaled], channels = [0], mask = None, histSize = [256], ranges = [0,256])
-        hist3 = cv2.calcHist([cl1], channels = [0], mask = None, histSize = [256], ranges = [0,256])
         plt.plot(hist1)  #ヒストグラム
         plt.plot(hist2)  #ヒストグラム
-        plt.plot(hist3)  #ヒストグラム
         plt.show()
 
     flipBGR = cv2.cvtColor(flip.copy(), cv2.COLOR_GRAY2BGR)   #イメージ出力の元画像
@@ -169,15 +158,9 @@ def process(filename, mode):
     if bbData is None:
         statusE = '円検出できず'
         print(statusE)
-        cv2.imshow('Hough', bbImg)
-        cv2.resizeWindow('Hough', winquarter)
-        cv2.waitKey(1)
         return bbImg, 0, 0, 0, 0, statusE
 
-    cv2.imshow('Hough', bbImg)
-    cv2.resizeWindow('Hough', winquarter)
-    cv2.waitKey(1)
-
+    
     bbCount = len(bbData)
     print('BB検出数', bbCount, end = '  ')
 
@@ -306,13 +289,6 @@ def process(filename, mode):
     tpDia = int(bbDia * kShadow)    #周辺の影の部分をマスク
     imgc = crop(scaled, tpCenter, (tpDia, tpDia))
     template = mask_circle(imgc, tpDia)
-    #2値化オプション??  ###
-    #ret, template = cv2.threshold(template, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-
-    #########特徴点検出用テンプレート（周辺画像までいれて広くしないと特徴点が検出されない）
-    #template2 = crop(median, tpCenter,(tpDia * 3, tpDia * 3))
-    #####################特徴点検出法
-
 
     #検出したBB弾すべてに角度推定を実行する
     print()
@@ -354,24 +330,15 @@ def process(filename, mode):
         #回転角を読み取り
         matchAngle, _ = estimateRot(scaled, template, startAngle, endAngle, point, bbDia)    # scaled
         #print("{:5.1f}deg  Match value:{:10.0f}".format(matchAngle, matchVal))
-
-        #########################################################
-        #特徴点検出法のとき
-        #angle2 = contourMatch(median, template2, point, bbDia)
-        #########################################################
-
         
         if firstAngle == 999:
             firstAngle = matchAngle     #最初のコマの角度
             prevAngle = matchAngle      #初回の代入で必要
 
-
-
         #変化角度の確認
         dAngle = matchAngle - prevAngle
         ###################################################
         
-
         #回転角度の線を表示
         lineLen = 160 // 2
         matchRad = math.radians(matchAngle)
@@ -716,7 +683,7 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
     (w, h) = template.shape[: : -1]
 
     # ぐるぐる回しながら相関が最大となる角度を求める
-    denomi = 1      #角度計算のステップ　1度/denomi  2->0.5deg 10->0.1deg-----------
+    denomi = 10      #角度計算のステップ　1度/denomi  2->0.5deg 10->0.1deg--------------------------------------------------------------STEP---------------------------
     matchAngle = 0
     for i in range(startAngle * denomi, endAngle * denomi):
         angle = i / denomi
@@ -742,7 +709,6 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
                 cv2.rectangle(cr2, topLeft, bottomRight, mazenta, 1)
 
                 cv2.imshow('matchBB', cr2)
-                #cv2.resizeWindow('matchBB', 150, 150) 
                 cv2.imshow('template', tp)
                 cv2.waitKey(1)
 
@@ -981,6 +947,7 @@ def mask_circle(image, dia):
     return cv2.bitwise_or(image, mask)
 
 
+
 ########  main  ######################################################################################
 #指定したフォルダの画像すべてに対して実行
 #pythonの関数の定義位置は、実際に実行するまでに定義されていればよい。
@@ -1015,14 +982,6 @@ endImgFileName = os.path.splitext(os.path.basename(files[-1]))[0]
 csvFileName = resultdir+'result'+startImgFileName+'-'+endImgFileName+'_hoprot.csv'
 
 print(f"画像 {startImgFileName} - {endImgFileName}  {len(files):3d}枚")
-
-##日付時刻の取得してファイル名を作成
-#t_delta = datetime.timedelta(hours=9)
-#JST = datetime.timezone(t_delta, 'JST')
-#now = datetime.datetime.now(JST)
-# YYMMDDhhmmss形式に書式化
-#dTime = now.strftime('%y%m%d%H%M%S')
-#csvFileName = "rotdata" + dTime + ".csv"
 
 #ヘッダー書き込み
 with open(csvFileName, 'w', encoding="utf-8") as fCsv:     #'w'->上書き
