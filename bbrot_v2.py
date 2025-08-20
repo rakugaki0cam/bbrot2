@@ -102,22 +102,24 @@ def process(filename, mode):
 
     image = cv2.imread(filename)
     #画像サイズと推定BB弾寸法（撮影範囲による）
-    #撮影対象の大きさ[mm]
-    subjectWidthMin = 210   #横方向撮影範囲寸法
+    #撮影対象の大きさ
+    subjectWidthMin = 210   #横方向撮影範囲寸法[mm]
     subjectWidthMax = 320
-    bbObjectSize = 6        #BB弾の物理寸法
+    bbObjectSize = 6        #BB弾の物理寸法 [mm]
     #BB弾の推定サイズ[pixel]の計算
-    bbPixelMin = int(image.shape[1] / subjectWidthMax * bbObjectSize)
-    bbPixelMax = int(image.shape[1] / subjectWidthMin * bbObjectSize)
+    height, width, _ = image.shape  # type: ignore
+
+    bbPixelMin = int(width / subjectWidthMax * bbObjectSize)
+    bbPixelMax = int(width / subjectWidthMin * bbObjectSize)
     #print('画像サイズ (x:', image.shape[1], 'y:', image.shape[0], ')', end = ' ')
     #print('検出するBB弾の大きさ', bbPixelMin, '~', bbPixelMax, 'pix')
 
     #グレースケール化(OCRで使用)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) # type: ignore
     #高さを中央付近450pxにクロップ
-    w = image.shape[1]          #LUMIX GX8:5184, LUMIX GX7:4592
-    h = int(image.shape[0] * 0.116) # GX8:3888, GX7:3448 -> 450pixel切り取り画像の縦ピクセル数 ### 2022/10/10 撮影高さ失敗600にて可
-    top = (image.shape[0] - h) // 2
+    w = width          #LUMIX GX8:5184, LUMIX GX7:4592
+    h = int(height * 0.116) # GX8:3888, GX7:3448 -> 450pixel切り取り画像の縦ピクセル数 ### 2022/10/10 撮影高さ失敗600にて可
+    top = (height - h) // 2
     flip = image[top: top + h, 0: w]
     #右から撃っているので、左から右への時系列になるように左右反転
     flip = cv2.flip(flip, 1)                                        # =0:上下反転、>0:左右反転、 <0:上下左右反転
@@ -822,11 +824,12 @@ def ocrLcd(image):
 
     out = cv2.imread('ocrimg.png')
     for t in txt:
+        
         #print('[ "' + t.content + '"', end = ' ')       # debug
         #print(t.position, "]")                          # debug
-        cv2.rectangle(out, t.position[0], t.position[1], (255, 0, 255), 2)
+        cv2.rectangle(out, t.position[0], t.position[1], (255, 0, 255), 2) # type: ignore
 
-    cv2.imshow('lcdImage', out)
+    cv2.imshow('lcdImage', out) # type: ignore
     cv2.waitKey(1)
     #判別
     if len(txt) < 4:
