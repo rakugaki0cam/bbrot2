@@ -26,14 +26,14 @@ import os
 import math
 #from webbrowser import BackgroundBrowser
 import csv
-import cv2
+import cv2  #openCV 画像解析      
 
-import pyocr
+import pyocr    #OCR 写真から数値を読み取り
 import pyocr.builders
 #import datetime
 import numpy as np
-import matplotlib.pyplot as plt
-from PIL import Image
+import matplotlib.pyplot as plt #グラフ描画（ヒストグラム）デバッグ用
+from PIL import Image   #.GIFアニメーション生成
 
 sys.path.append('/path/to/dir')
 
@@ -238,13 +238,13 @@ def process(filename, mode):
         print(f'*** 読み取り初速値がエラー "{txtV0}"   周期時間値がOKの時はreturnキーを押す')
         txtV0 = 99999
 
-    #初速の計算で周期値の読み取りが正しいかを確認
+    #初速を計算して周期値の読み取りが正しいかを確認
     v0 = 0.012 / (dt / 1000000)
     if abs(txtV0 - v0) >= 0.1:
         #初速の計算値が合わない時
         if txtV0 != 99999:
             print(f'*** 読み取り初速値 "{txtV0}"と計算値{v0:6.2f}m/sが合わない  周期時間値がOKの時はreturnキーを押す')
-        #周期をキー入力
+        #周期をキーで手入力
         while True:
             inpTxt = input('コマ間の周期時間 [usec] = ')
             dtMin = 100     #usec  @v0=120m/sec
