@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# bbrot2 wrapper script
+# Run from the project root directory.
+
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ -x "$DIR/dist/bbrot_v2" ]; then
+  exec "$DIR/dist/bbrot_v2" "$@"
+fi
+
+if [ -x "$DIR/.venv/bin/python" ]; then
+  exec "$DIR/.venv/bin/python" "$DIR/bbrot_v2.py" "$@"
+fi
+
+echo "Error: cannot find dist/bbrot_v2 or .venv/bin/python to run bbrot2." >&2
+exit 1

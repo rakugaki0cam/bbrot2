@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+
+# Finder icon launch has no terminal; run in app root and log output.
+cd "$APP_ROOT"
+export BBROT_NONINTERACTIVE=1
+export PATH="/usr/local/bin:$PATH"
+export TESSDATA_PREFIX="/usr/local/share/tessdata"
+export PYTHONUNBUFFERED=1
+
+if [ -x "$APP_ROOT/.venv/bin/python" ]; then
+  "$APP_ROOT/.venv/bin/python" "$APP_ROOT/bbrot_v2.py" > "$APP_ROOT/bbrot2.log" 2>&1
+  exit $?
+fi
+
+if [ -x "$APP_ROOT/dist/bbrot_v2" ]; then
+  "$APP_ROOT/dist/bbrot_v2" > "$APP_ROOT/bbrot2.log" 2>&1
+  exit $?
+fi
+
+echo "Error: cannot find .venv/bin/python or dist/bbrot_v2" > "$APP_ROOT/bbrot2.log"
+exit 1

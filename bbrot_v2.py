@@ -36,6 +36,7 @@ import matplotlib.pyplot as plt #グラフ描画（ヒストグラム）デバ�
 from PIL import Image   #.GIFアニメーション生成
 
 sys.path.append('/path/to/dir')
+NON_INTERACTIVE = os.getenv('BBROT_NONINTERACTIVE', '0').lower() in ('1', 'true', 'yes')
 
 #ウインドウの設定
 #BB image window
@@ -178,7 +179,7 @@ def process(filename, mode):
     #BB検出数の判定
     if bbCount < 10:
         statusE = 'BB検出数が不足'
-        input(statusE)
+        print(statusE)
         return bbImg, 0, 0, 0, 0, statusE
 
     #print('BBデータ [n,x,y,r]: ', bbData)
@@ -244,21 +245,28 @@ def process(filename, mode):
         #初速の計算値が合わない時
         if txtV0 != 99999:
             print(f'*** 読み取り初速値 "{txtV0}"と計算値{v0:6.2f}m/sが合わない  周期時間値がOKの時はreturnキーを押す')
-        #周期をキーで手入力
-        while True:
-            inpTxt = input('コマ間の周期時間 [usec] = ')
-            dtMin = 100     #usec  @v0=120m/sec
-            dtMax = 1000    #usec  @v0=12m/sec
-            if inpTxt == '':
-                dt = float(txtDt)
-                if (dt > dtMin and dt < dtMax):     #12 ~ 100m/sec (@12mm)
+        #非対話モードの場合はOCRから取得した値をそのまま使用
+        dtMin = 100     #usec  @v0=120m/sec
+        dtMax = 1000    #usec  @v0=12m/sec
+        if NON_INTERACTIVE:
+            print('非対話モード: OCR読取値を使用します')
+            if dt < dtMin or dt > dtMax:
+                print(f'非対話モード: dt={dt} が範囲外なので補正します ({dtMin}-{dtMax})')
+                dt = min(max(dt, dtMin), dtMax)
+            v0 = 0.012 / (dt / 1000000)
+        else:
+            while True:
+                inpTxt = input('コマ間の周期時間 [usec] = ')
+                if inpTxt == '':
+                    dt = float(txtDt)
+                    if (dt > dtMin and dt < dtMax):     #12 ~ 100m/sec (@12mm)
+                        break
+                    else:
+                        continue
+                dt = float(inpTxt)
+                if (dt > dtMin and dt < dtMax):
+                    v0 = 0.012 / (dt / 1000000)         #初速の計算を入力値でやり直し
                     break
-                else:
-                    continue
-            dt = float(inpTxt)
-            if (dt > dtMin and dt < dtMax):
-                v0 = 0.012 / (dt / 1000000)         #初速の計算を入力値でやり直し
-                break
     #OK
     print(f'  周期dt = {dt:6.2f}usec', end = " ")   #周期値
     print(f'  初速v0 = {v0:6.2f}m/sec')             #初速
@@ -675,7 +683,8 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
     マッチング値
     """
     angle = -1
-    max9 = -9999999999
+    # max9 = -9999999999    #2026.06.06 TM_CCOEFF -> TM_CCOEFF_NORMED に変更したので、マッチング値の範囲が変わったため、-1.0に変更
+    max9 = -1.0
     ext = 10    #周りを少し広く
     cr = crop(image, pt, (size + ext, size + ext ))
     #周囲を白く
@@ -692,7 +701,8 @@ def estimateRot(image, template, startAngle, endAngle, pt, size):
         angle = i / denomi
         
         tp = rot(template, angle)
-        matchResult = cv2.matchTemplate(cr, tp, cv2.TM_CCOEFF)
+        # matchResult = cv2.matchTemplate(cr, tp, cv2.TM_CCOEFF)
+        matchResult = cv2.matchTemplate(cr, tp, cv2.TM_CCOEFF_NORMED)   #2026.06.06 Google AIによる提案　中心のブレはすこしよくなったような
         _, maxVal, _, maxLoc = cv2.minMaxLoc(matchResult)   ###minVal,maxVal,minIndex,maxIndex
 
         if maxVal > max9:
@@ -1048,6 +1058,7 @@ print("回転アニメを.gifァイルにセーブしました。")
 print("測定データ一覧表を.csvファイルにセーブしました。")
 print('Complete')
 print()
-input('Push any key -> exit system ')
+if not NON_INTERACTIVE:
+    input('Push any key -> exit system ')
 sys.exit()
 

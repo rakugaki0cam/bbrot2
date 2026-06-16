@@ -25,4 +25,32 @@ OCRは装置の表示フォントの改良でほぼ正確に読み込めるよ�
 
 ホップ回転数[rps]　= 1000000usec / (発光周期[usec] x コマ数) x (回転角[°] / 360°)
 
+## 実行方法
+
+1. プロジェクトルートへ移動します。
+   ```bash
+   cd /Users/isober/python/bbrot2
+   ```
+2. 既存の実行ファイルがある場合は、`dist/bbrot_v2` を使って実行します。
+   ```bash
+   ./bbrot2
+   ```
+   あるいは直接:
+   ```bash
+   ./dist/bbrot_v2
+   ```
+3. Finder のアイコンで起動する場合は、アプリバンドル `bbrot2.app` をダブルクリックします。
+   - 実行中の出力は `bbrot2.log` に保存されます。
+   - macOS のセキュリティ警告が出た場合は、`bbrot2.app` を右クリックして「開く」を選択してください。
+4. `dist/bbrot_v2` が無い場合は、仮想環境の Python で `bbrot_v2.py` を実行します。
+   ```bash
+   ./.venv/bin/python bbrot_v2.py
+   ```
+
+## 生成物
+
+- `dist/bbrot_v2`: PyInstaller によって作成された単一実行ファイル
+- `bbrot2`: 実行ラッパースクリプト
+- `bbresult/`: 解析結果の `csv`・`jpg`・`gif` を出力するディレクトリ
+
 
